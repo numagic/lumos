@@ -85,17 +85,16 @@ class TestTrackSweep(TestCase):
 
         results = pd.DataFrame()
         for f in track_files:
-            # result = _solve_with_track(f)
+            result = _solve_with_track(f)
             # HACK: remove this quick test hack
-            import random
-
-            result = {
-                "track": f,
-                "status": random.randint(0, 1),
-                "num_iter": random.randint(10, 30),
-                "laptime": random.random(),
-                "status_msg": "bla",
-            }
+            # import random
+            # result = {
+            #     "track": f,
+            #     "status": random.randint(0, 1),
+            #     "num_iter": random.randint(10, 30),
+            #     "laptime": random.random(),
+            #     "status_msg": "bla",
+            # }
 
             results = results.append(result, ignore_index=True)
 

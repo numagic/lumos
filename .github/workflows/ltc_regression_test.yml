@@ -22,7 +22,7 @@ jobs:
           environment-file: environment.yml
       - name: Install lumos
         run: python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
-      - name: Run unittest
+      - name: Run LTC sweep
         shell: bash -l {0}
         # This would fail if pytest fails, and will write out result files if successful
         run: python3 -m unittest regression_tests.test_ltc_sweep -v
@@ -49,7 +49,11 @@ jobs:
           tool: customSmallerIsBetter
           # Where the output from the benchmark tool is stored
           output-file-path: summary.json
-          # Where the previous data file is stored
-          external-data-json-path: ./cache/benchmark-data.json
           # Workflow will fail when an alert happens
-          fail-on-alert: true                    
+          fail-on-alert: true             
+          # Set auto-push to false since GitHub API token is not given
+          auto-push: False
+          # Need to ensure external-data-json-path is not set, otherwise won't create
+          # gh-pages branch
+      - name: Push benchmark result
+        run: git push 'https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/numagic/lumos.git' gh-pages:gh-pages
