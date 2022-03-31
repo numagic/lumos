@@ -50,7 +50,7 @@ jobs:
           # Where the output from the benchmark tool is stored
           output-file-path: summary.json
           # Workflow will fail when an alert happens
-          fail-on-alert: true             
+          fail-on-alert: False             
           # Set auto-push to false since GitHub API token is not given
           auto-push: False
           # Need to ensure external-data-json-path is not set, otherwise won't create

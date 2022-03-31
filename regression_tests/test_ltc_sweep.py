@@ -86,16 +86,6 @@ class TestTrackSweep(TestCase):
         results = pd.DataFrame()
         for f in track_files:
             result = _solve_with_track(f)
-            # HACK: remove this quick test hack
-            # import random
-            # result = {
-            #     "track": f,
-            #     "status": random.randint(0, 1),
-            #     "num_iter": random.randint(10, 30),
-            #     "laptime": random.random(),
-            #     "status_msg": "bla",
-            # }
-
             results = results.append(result, ignore_index=True)
 
         # Summary statistics
@@ -112,13 +102,15 @@ class TestTrackSweep(TestCase):
             ]
         )
 
+        # Artifacts files for the record
         results.to_csv("results.csv")
         summary.to_csv("summary.csv")
 
-        # HACK: copy paste now, but merge with df creation later
         def _create_metric(name, unit, value):
             return {"name": name, "unit": unit, "value": value}
 
+        # Create benchmark result for traclomg amd github page visualization
+        # See: https://github.com/benchmark-action/github-action-benchmark
         # using customSmallerIsBetter, so need to make metrics also better when smaller
         metrics = [
             _create_metric("num_total", "-", int(num_success)),
