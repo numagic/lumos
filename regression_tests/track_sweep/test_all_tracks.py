@@ -71,8 +71,8 @@ class TestLapsimOnTrack(TestCase):
         results = pd.DataFrame()
         for f in track_files:
             result = _solve_with_track(f)
+            # HACK: remove this quick test hack
             # import random
-
             # result = {
             #     "track": f,
             #     "status": random.randint(0, 1),
@@ -80,7 +80,8 @@ class TestLapsimOnTrack(TestCase):
             #     "laptime": random.random(),
             #     "status_msg": "bla",
             # }
-            # results = results.append(result, ignore_index=True)
+
+            results = results.append(result, ignore_index=True)
 
         # Summary statistics
         summary = pd.DataFrame(
