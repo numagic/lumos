@@ -1,0 +1,38 @@
+name: ltc-regression-test
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    # by default only opened, synchronize and reopened activity would trigger this event
+    # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
+    # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+    branches:
+      - 'main'
+
+jobs:
+  run-ltc-regression-test:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.9
+          auto-update-conda: true
+          environment-file: environment.yml
+      - name: Install lumos
+        run: python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
+      - name: Run unittest
+        shell: bash -l {0}
+        # This would fail if pytest fails, and will write out result files if successful
+        run: |
+          conda install -y pytest parameterized
+          pytest regression_tests/ -v
+      - uses: actions/upload-artifact@v3
+        with:
+          name: results
+          path: ltc_sweep/results.csv
+      - uses: actions/upload-artifact@v3
+        with:
+          name: summary
+          path: ltc_sweep/summary.csv          

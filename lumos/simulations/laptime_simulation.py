@@ -148,6 +148,17 @@ class LaptimeSimulation(FixedMeshOCP):
 
         super().set_bounds(bounds + track_bounds)
 
+    def update_track_bounds(self):
+        """TODO: To be merged with set_bounds"""
+        curvature = self._track.curvature_at(self.distance_mesh)
+        heading = self._track.heading_at(self.distance_mesh)
+        left_distance = self._track.left_distance_at(self.distance_mesh)
+        right_distance = self._track.right_distance_at(self.distance_mesh)
+
+        self.update_bound("inputs", "track_curvature", (curvature, curvature))
+        self.update_bound("inputs", "track_heading", (heading, heading))
+        self.update_bound("states", "n", (-right_distance, left_distance))
+
     def _build_objective(self):
         # Common objective regardless of the problem
         time_objective = BaseObjective(

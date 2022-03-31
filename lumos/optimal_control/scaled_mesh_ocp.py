@@ -619,6 +619,18 @@ class ScaledMeshOCP(CompositeProblem):
         self.lb = self.dec_var_operator.flatten_var(**dec_var_lb)
         self.ub = self.dec_var_operator.flatten_var(**dec_var_ub)
 
+    def update_bound(self, group, name, bounds):
+        """TODO: merge this with set_bounds?"""
+        if group == "global":
+            idx = self.dec_var_operator.get_global_var_index(name)
+        else:
+            idx = [
+                self.dec_var_operator.get_var_index_in_dec(group, name, s)
+                for s in range(self.num_stages)
+            ]
+
+        self.lb[idx], self.ub[idx] = bounds
+
     def set_cons(self):
         # Set all constriants to equality
         self.cl = np.zeros(self.num_con)
