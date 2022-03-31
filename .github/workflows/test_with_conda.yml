@@ -1,0 +1,37 @@
+name: test-with-conda
+
+on:
+  push:
+    branches:
+      - '**' # TODO: temporarily run on all pushes before moving to a PR only mode
+  pull_request:
+    # by default only opened, synchronize and reopened activity would trigger this event
+    # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
+    # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+    branches:
+      - dev
+
+jobs:
+  miniconda:
+    name: Test with conda
+    runs-on: ${{ matrix.os }}
+    strategy:
+        fail-fast: false
+        matrix:
+            os: ["ubuntu-latest", "macos-latest"] # jax needs custom installation on windows.
+            python-version: ["3.7", "3.8", "3.9"]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          auto-update-conda: true
+          environment-file: environment.yml
+      - name: Install lumos
+        run: python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
+      - name: Run unittest
+        shell: bash -l {0}
+        run: |
+          conda install -y pytest parameterized
+          pytest tests/ examples/
+          

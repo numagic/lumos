@@ -1,0 +1,10 @@
+version: '3'
+services:
+    lumos-dev:
+        deploy:
+            resources:
+                # limits:
+                #     cpus: 1
+                reservations:
+                    devices:
+                        - capabilities: [gpu]                 

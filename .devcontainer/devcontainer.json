@@ -1,0 +1,36 @@
+{
+    "name": "numagic_dev",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "lumos-dev",
+    // Using local or container env vars in devcontainer.json
+    // see: https://code.visualstudio.com/docs/remote/devcontainerjson-reference
+    "workspaceFolder": "/home/${localEnv:USER}/numagic/lumos",
+    "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "njpwerner.autodocstring",
+        "visualstudioexptteam.vscodeintellicode"
+    ],
+    "settings": {
+        // Somehow this defaultInterpeterpath is no longer picked-up automatically. The
+        // user needs to select python interpreter manually once, and then it's set.
+        // Failing to set the python interpreter would only affect vscode python
+        // extension functionalities.
+        "python.defaultInterpreterPath": "${containerEnv:CONDA_DIR}/envs/lumos/bin/python",
+        "python.languageServer": "Pylance",
+        "python.formatting.provider": "black",
+        "editor.formatOnSave": true,
+        "editor.formatOnSaveMode": "file",
+        "python.linting.enabled": true,
+        "python.linting.flake8Enabled": true,
+        "python.linting.flake8Args": [
+            "--ignore=E203",
+            "--ignore=E266",
+            "--ignore=E501",
+            "--ignore=W503",
+            "--max-line-length=88",
+            "--select=B,C,E,F,W,T4,B9",
+            "--max-complexity=18"
+        ],
+    },
+}

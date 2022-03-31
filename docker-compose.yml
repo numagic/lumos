@@ -1,0 +1,28 @@
+version: '3'
+services:
+    lumos-dev:
+        image: '${CONTAINER_REGISTRY}/lumos-dev-${USER}:${LUMOS_DOCKER_BASE_VERSION}'
+        container_name: lumos_dev
+        hostname: lumos_dev
+        build:
+            context: '.'
+            dockerfile: 'docker/base/Dockerfile-dev'
+            args:
+                - 'CONTAINER_REGISTRY'
+                - 'LUMOS_DOCKER_BASE_VERSION'
+                - 'LUMOS_DOCKER_USER_NAME=${USER}'
+        volumes:
+            - '.:/home/${USER}/numagic/lumos'
+            # share git credentials and config
+            - '/Users/${USER}/.ssh:/home/${USER}/.ssh'
+            - '/Users/${USER}/.gitconfig:/home/${USER}/.gitconfig'
+        environment:
+            - 'PYTHONPATH=/home/${USER}/numagic/lumos'
+            # hard-coded ssh key name is the same
+            - 'GIT_SSH_COMMAND=ssh -i /home/${USER}/.ssh/id_ed25519'
+        restart: unless-stopped
+        
+        # Temporary hack to aid development.
+        ports:
+            - '8000:8000'
+            - '81:8050'

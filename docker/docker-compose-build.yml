@@ -1,0 +1,30 @@
+version: '3'
+services:
+    lumos-base:
+        image: '${CONTAINER_REGISTRY}/lumos-base:${LUMOS_DOCKER_BASE_VERSION}'
+        build:
+            context: '..'
+            cache_from:
+                # If cache is not found, won't fail the build.
+                - '${CONTAINER_REGISTRY}/lumos-base:cache'
+            dockerfile: 'docker/base/Dockerfile-base'
+            args:
+                - 'LUMOS_BASE_IMAGE'
+                - 'LUMOS_BASE_IMAGE_VERSION'
+                - 'CONDA_DIR'
+                - 'MINICONDA_VERSION'
+                - 'LUMOS_DOCKER_DATA_DIR'
+                - 'LUMOS_DOCKER_PYTHON_VERSION'
+                - 'CONTAINER_REGISTRY'
+    lumos-ci:
+        image: '${CONTAINER_REGISTRY}/lumos-ci:${LUMOS_DOCKER_BASE_VERSION}'
+        build:
+            context: '..'
+            cache_from:
+                # If cache is not found, won't fail the build.
+                - '${CONTAINER_REGISTRY}/lumos-ci:cache'
+            dockerfile: 'docker/base/Dockerfile-ci'
+            args:
+                - 'CONTAINER_REGISTRY'
+                - 'LUMOS_DOCKER_BASE_VERSION'
+                - 'CONDA_DIR'

@@ -1,0 +1,17 @@
+# VSCode artifacts
+.vscode/
+
+# Python3 bytecode
+**/__pycache__
+
+# Mac folder artifact
+.DS_store
+
+# temporary files
+*.tmp
+
+# experiment results
+/results
+
+# binaries
+*.so
