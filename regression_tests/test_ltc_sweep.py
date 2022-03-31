@@ -123,7 +123,7 @@ class TestTrackSweep(TestCase):
         # using customSmallerIsBetter, so need to make metrics also better when smaller
         metrics = [
             _create_metric("num_total", "-", int(num_success)),
-            _create_metric("failure_pct", "%", 1 - num_success / len(results) * 100),
+            _create_metric("failure_pct", "%", (1 - num_success / len(results)) * 100),
             _create_metric(
                 "avg_success_iter", "iter", results.loc[is_success, "num_iter"].mean()
             ),
