@@ -111,7 +111,5 @@ class TestTrackSweep(TestCase):
             ]
         )
 
-        results.to_csv("ltc_sweep_results.csv")
-        summary.to_csv("ltc_sweep_summary.csv")
-
-        pass
+        results.to_csv("results.csv")
+        summary.to_csv("summary.csv")
