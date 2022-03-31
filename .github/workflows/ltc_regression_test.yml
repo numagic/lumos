@@ -38,12 +38,15 @@ jobs:
           if-no-files-found: error
       # Download previous benchmark result from cache (if exists)
       - name: Download previous benchmark data
+        # Only store reults and display if push to main
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}      
         uses: actions/cache@v1
         with:
           path: ./cache
           key: ${{ runner.os }}-benchmark
       # Run `github-action-benchmark` action
       - name: Store benchmark result
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: customSmallerIsBetter
@@ -56,4 +59,5 @@ jobs:
           # Need to ensure external-data-json-path is not set, otherwise won't create
           # gh-pages branch
       - name: Push benchmark result
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}      
         run: git push 'https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/numagic/lumos.git' gh-pages:gh-pages
