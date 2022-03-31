@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       feature_docker_base_version: ${{ steps.feature_docker_base_version.outputs.value}}
-      dev_docker_base_version: ${{ steps.dev_docker_base_version.outputs.value}}
+      main_docker_base_version: ${{ steps.main_docker_base_version.outputs.value}}
     steps:
       - name: Checkout feature branch
         uses: actions/checkout@v2
@@ -26,13 +26,13 @@ jobs:
         with:
           path: '.env'
           property: LUMOS_DOCKER_BASE_VERSION  
-      - name: Checkout dev branch
+      - name: Checkout main branch
         uses: actions/checkout@v2
         with:
-          ref: dev
+          ref: main
       - name: Read env vars from .env file
         uses: christian-draeger/read-properties@1.0.1
-        id: dev_docker_base_version
+        id: main_docker_base_version
         with:
           path: '.env'
           property: LUMOS_DOCKER_BASE_VERSION  
@@ -83,7 +83,7 @@ jobs:
 
           # if [ ${{ needs.check-base-image-change.outputs.should_build_image }} ]; then
           #   # image changed, version number incremented?            
-          #   if ! [ $(ver ${{ needs.set-up-env-vars.outputs.feature_docker_base_version}}) -gt $(ver ${{ needs.set-up-env-vars.outputs.dev_docker_base_version}}) ]; then
+          #   if ! [ $(ver ${{ needs.set-up-env-vars.outputs.feature_docker_base_version}}) -gt $(ver ${{ needs.set-up-env-vars.outputs.main_docker_base_version}}) ]; then
           #     echo 'Docker image needs to be rebuilt but version is not incremented!'
           #     exit 1
           #   fi
