@@ -12,8 +12,7 @@ on:
       - 'main'
 
 jobs:
-  miniconda:
-    name: Test with conda
+  run-unit-tests-with-miniconda:
     runs-on: ${{ matrix.os }}
     strategy:
         fail-fast: false
