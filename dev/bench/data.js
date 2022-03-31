@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1648765687704,
+  "lastUpdate": 1648766673659,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -69,6 +69,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "avg_success_iter",
             "value": 56.84,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "numagic",
+            "username": "numagic"
+          },
+          "committer": {
+            "name": "numagic",
+            "username": "numagic"
+          },
+          "id": "93daf28f1f3c997f58777fe25bc468e743073d44",
+          "message": "add laptime simulation regression test",
+          "timestamp": "2022-03-15T14:25:23Z",
+          "url": "https://github.com/numagic/lumos/pull/4/commits/93daf28f1f3c997f58777fe25bc468e743073d44"
+        },
+        "date": 1648766672539,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "num_total",
+            "value": 25,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 0,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 56.2,
             "unit": "iter"
           }
         ]
