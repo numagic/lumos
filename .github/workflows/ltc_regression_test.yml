@@ -25,14 +25,14 @@ jobs:
       - name: Run unittest
         shell: bash -l {0}
         # This would fail if pytest fails, and will write out result files if successful
-        run: python3 -m unittest regression_tests.track_sweep.test_all_tracks -v
+        run: python3 -m unittest regression_tests.test_ltc_sweep -v
           # conda install -y pytest parameterized
           # pytest regression_tests/ -v
       - uses: actions/upload-artifact@v3
         with:
           name: results
-          path: ltc_sweep/results.csv
+          path: results.csv
       - uses: actions/upload-artifact@v3
         with:
           name: summary
-          path: ltc_sweep/summary.csv          
+          path: summary.csv          

@@ -5,13 +5,14 @@ from unittest import TestCase
 import pandas as pd
 
 from lumos.models.composition import ModelMaker
+from lumos.models.tires.utils import create_params_from_tir_file
 from lumos.simulations.laptime_simulation import LaptimeSimulation
 
 logger = logging.getLogger()
 
 
-class TestLapsimOnTrack(TestCase):
-    def test_ltc(self):
+class TestTrackSweep(TestCase):
+    def test_sweep(self):
 
         TRACK_DIR = "data/tracks"
 
@@ -33,7 +34,20 @@ class TestLapsimOnTrack(TestCase):
         )
 
         model_config = ModelMaker.make_config("SimpleVehicleOnTrack")
-        ocp = LaptimeSimulation(model_config=model_config, sim_config=sim_config)
+
+        # Change the tire to sharpened
+        model = ModelMaker.make_model_from_config(model_config)
+        params = model.get_recursive_default_params()
+        sharpened_params = create_params_from_tir_file("data/tires/sharpened.tir")
+        # FIXME: here we're using private methods. We should probably add a method to change
+        # the parameters of an entire node in the ParameterTree
+        tire_params = params._get_subtree("vehicle.tire")
+        tire_params._data = sharpened_params
+        params.replace_subtree("vehicle.tire", tire_params)
+
+        ocp = LaptimeSimulation(
+            model_params=params, model_config=model_config, sim_config=sim_config
+        )
 
         def _solve_with_track(track_file):
             ocp._build_track_from_file(track_file)
@@ -84,22 +98,20 @@ class TestLapsimOnTrack(TestCase):
             results = results.append(result, ignore_index=True)
 
         # Summary statistics
+        is_success = results["status"] == 0
+        num_success = is_success.sum()
         summary = pd.DataFrame(
             [
                 {
-                    "num_success": (results["status"] == 1).sum(),
+                    "num_success": num_success,
                     "num_total": len(results),
-                    "success_pct": (results["status"] == 1).sum() / len(results) * 100,
-                    "avg_success_iter": results.loc[
-                        results["status"] == 1, "num_iter"
-                    ].mean(),
+                    "success_pct": num_success / len(results) * 100,
+                    "avg_success_iter": results.loc[is_success, "num_iter"].mean(),
                 }
             ]
         )
 
-        OUTPUT_DIR = "ltc_sweep"
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        results.to_csv(os.path.join(OUTPUT_DIR, "results.csv"))
-        summary.to_csv(os.path.join(OUTPUT_DIR, "summary.csv"))
+        results.to_csv("ltc_sweep_results.csv")
+        summary.to_csv("ltc_sweep_summary.csv")
 
         pass

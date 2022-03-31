@@ -64,7 +64,7 @@ class MF52(BaseTire):
 
     @classmethod
     def get_default_params(cls) -> Dict[str, Any]:
-        return create_params_from_tir_file("data/tires/sharpened.tir")
+        return create_params_from_tir_file("data/tires/default.tir")
 
     def forward(self, inputs: lnp.ndarray) -> lnp.ndarray:
         """Pacejka MF5.2 tire model
