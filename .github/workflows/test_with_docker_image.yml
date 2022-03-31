@@ -3,20 +3,20 @@ name: test-with-docker-image
 on:
   push:
     branches:
-      - '**' # TODO: temporarily run on all pushes before moving to a PR only mode
+      - 'main'
   pull_request:
     # by default only opened, synchronize and reopened activity would trigger this event
     # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
     # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
     branches:
-      - dev
+      - 'main'
 
 jobs:
   set-up-env-vars:
     runs-on: ubuntu-latest
     outputs:
       feature_docker_base_version: ${{ steps.feature_docker_base_version.outputs.value}}
-      dev_docker_base_version: ${{ steps.dev_docker_base_version.outputs.value}}
+      main_docker_base_version: ${{ steps.main_docker_base_version.outputs.value}}
     steps:
       - name: Checkout feature branch
         uses: actions/checkout@v2
@@ -26,13 +26,13 @@ jobs:
         with:
           path: '.env'
           property: LUMOS_DOCKER_BASE_VERSION  
-      - name: Checkout dev branch
+      - name: Checkout main branch
         uses: actions/checkout@v2
         with:
-          ref: dev
+          ref: main
       - name: Read env vars from .env file
         uses: christian-draeger/read-properties@1.0.1
-        id: dev_docker_base_version
+        id: main_docker_base_version
         with:
           path: '.env'
           property: LUMOS_DOCKER_BASE_VERSION  
@@ -81,13 +81,13 @@ jobs:
           # is in any case flaky
           function ver { printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' '); }
 
-          # if [ ${{ needs.check-base-image-change.outputs.should_build_image }} ]; then
-          #   # image changed, version number incremented?            
-          #   if ! [ $(ver ${{ needs.set-up-env-vars.outputs.feature_docker_base_version}}) -gt $(ver ${{ needs.set-up-env-vars.outputs.dev_docker_base_version}}) ]; then
-          #     echo 'Docker image needs to be rebuilt but version is not incremented!'
-          #     exit 1
-          #   fi
-          # fi
+          if [ ${{ needs.check-base-image-change.outputs.should_build_image }} ]; then
+            # image changed, version number incremented?            
+            if ! [ $(ver ${{ needs.set-up-env-vars.outputs.feature_docker_base_version}}) -gt $(ver ${{ needs.set-up-env-vars.outputs.main_docker_base_version}}) ]; then
+              echo 'Docker image needs to be rebuilt but version is not incremented!'
+              exit 1
+            fi
+          fi
               
   create-image-tag:
     runs-on: ubuntu-latest
@@ -176,7 +176,7 @@ jobs:
   # We want the unit test to depend on image build, but also executes when the image build is skipped.
   # Using a pure "needs" is not sufficient.
   # The solution is inspired by here: https://github.com/actions/runner/issues/491#issuecomment-850884422
-  run-unit-tests:
+  run-unit-tests-with-docker-image:
     runs-on: ubuntu-latest
     needs: 
       - create-image-tag
