@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from unittest import TestCase
@@ -84,16 +85,17 @@ class TestTrackSweep(TestCase):
 
         results = pd.DataFrame()
         for f in track_files:
-            result = _solve_with_track(f)
+            # result = _solve_with_track(f)
             # HACK: remove this quick test hack
-            # import random
-            # result = {
-            #     "track": f,
-            #     "status": random.randint(0, 1),
-            #     "num_iter": random.randint(10, 30),
-            #     "laptime": random.random(),
-            #     "status_msg": "bla",
-            # }
+            import random
+
+            result = {
+                "track": f,
+                "status": random.randint(0, 1),
+                "num_iter": random.randint(10, 30),
+                "laptime": random.random(),
+                "status_msg": "bla",
+            }
 
             results = results.append(result, ignore_index=True)
 
@@ -113,3 +115,19 @@ class TestTrackSweep(TestCase):
 
         results.to_csv("results.csv")
         summary.to_csv("summary.csv")
+
+        # HACK: copy paste now, but merge with df creation later
+        def _create_metric(name, unit, value):
+            return {"name": name, "unit": unit, "value": value}
+
+        metrics = [
+            _create_metric("num_total", "-", int(num_success)),
+            _create_metric("success_pct", "%", num_success / len(results) * 100),
+            _create_metric(
+                "avg_success_iter", "iter", results.loc[is_success, "num_iter"].mean()
+            ),
+        ]
+
+        with open("summary.json", "w") as outfile:
+            json.dump(metrics, outfile)
+        pass
