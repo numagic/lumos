@@ -30,9 +30,9 @@ jobs:
           # pytest regression_tests/ -v
       - uses: actions/upload-artifact@v3
         with:
-          name: results
           path: results.csv
+          if-no-files-found: error
       - uses: actions/upload-artifact@v3
         with:
-          name: summary
-          path: summary.csv          
+          path: summary.csv
+          if-no-files-found: error          
