@@ -1,0 +1,19 @@
+ARG LUMOS_DOCKER_BASE_VERSION
+ARG CONTAINER_REGISTRY
+
+FROM ${CONTAINER_REGISTRY}/lumos-base:${LUMOS_DOCKER_BASE_VERSION}
+ENV DEBIAN_FRONTEND="noninteractive"
+
+ARG CONDA_DIR
+# Make conda command available
+ENV CONDA_DIR $CONDA_DIR
+ENV PATH=$CONDA_DIR/bin:$PATH
+RUN $CONDA_DIR/bin/conda init bash
+
+
+# Install additional tools for ci
+# Rely on -i flag to activate conda
+# see: https://stackoverflow.com/a/60604010
+SHELL ["/bin/bash", "-c", "-i"]
+RUN conda activate lumos \
+    && conda install -y pytest parameterized black flake8

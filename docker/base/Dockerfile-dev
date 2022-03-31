@@ -1,0 +1,57 @@
+ARG LUMOS_DOCKER_BASE_VERSION
+ARG CONTAINER_REGISTRY
+
+FROM ${CONTAINER_REGISTRY}/lumos-ci:${LUMOS_DOCKER_BASE_VERSION}
+ENV DEBIAN_FRONTEND="noninteractive"
+
+# Add non-root user, make the UID and GID the same as host to avoid permission issue on
+# linux: https://vsupalov.com/docker-shared-permissions/#build-the-right-image
+ARG LUMOS_DOCKER_USER_NAME
+ARG UID
+ARG GID
+
+# Install git and gnupg2 to make git integration work (ssh and gpg)
+RUN apt-get update \
+    && apt-get install -y vim git gnupg2 \
+    # HACK: the gitconfig points to /usr/local/bin (mac installation location) but 
+    # linux installs gpg in /usr/bin, so we work around this with a soft link
+    && ln -s /usr/bin/gpg /usr/local/bin/gpg \
+    # install ssh server
+    && apt-get -y --no-install-suggests --no-install-recommends install openssh-server \
+    && mkdir /run/sshd \
+    && chmod 0755 /run/sshd
+
+# Create the user: https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user
+# We make one change: to use /bin/bash as the login shell
+# group 20 on mac already exists in the base image, so use the -f option (which cancels
+# the gid add if exists)
+#
+# Also installs libgfortran4 to make testing with HSL libraries (if available) possible.
+RUN groupadd -f --gid $GID $LUMOS_DOCKER_USER_NAME \
+    && useradd --uid $UID --gid $GID -m $LUMOS_DOCKER_USER_NAME -s /bin/bash \
+    && apt-get update \
+    && apt-get install -y sudo \
+    && apt-get install -y libgfortran4 \
+    && echo $LUMOS_DOCKER_USER_NAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$LUMOS_DOCKER_USER_NAME \
+    && chmod 0440 /etc/sudoers.d/$LUMOS_DOCKER_USER_NAME
+
+# Let the user own the conda env
+RUN sudo chown -R $UID:$GID $CONDA_DIR/envs
+
+USER $LUMOS_DOCKER_USER_NAME
+
+# Now for the user, conda needs to be made available, so we do the following which was done
+# for the base as well (but that was not for the same user)
+# This also updates the bashrc
+RUN $CONDA_DIR/bin/conda init bash \
+    # Make sure the right conda env is activated in interactive shell via .bashrc
+    && echo "conda deactivate" >> ~/.bashrc \
+    && echo "conda activate lumos" >> ~/.bashrc
+
+# Install additional tools to help dev and debug
+RUN conda activate lumos \
+    && pip install dash-bootstrap-components flask-caching
+
+# Start SSH server at entry point
+EXPOSE 22
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh", "/usr/sbin/sshd", "-D"]

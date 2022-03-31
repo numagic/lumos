@@ -1,0 +1,51 @@
+ARG LUMOS_BASE_IMAGE
+ARG LUMOS_BASE_IMAGE_VERSION
+
+FROM ${LUMOS_BASE_IMAGE}:${LUMOS_BASE_IMAGE_VERSION} as base
+ENV DEBIAN_FRONTEND="noninteractive"
+
+# These must be specified after 'FROM'
+# ref: https://docs.docker.com/compose/compose-file/compose-file-v3/
+ARG CONDA_DIR
+ARG MINICONDA_VERSION
+ARG LUMOS_DOCKER_DATA_DIR
+ARG LUMOS_DOCKER_PYTHON_VERSION
+
+# We need CONDA_DIR for scripts inside our docker image
+ENV CONDA_DIR $CONDA_DIR
+
+# install miniconda
+# ref: https://towardsdatascience.com/conda-pip-and-docker-ftw-d64fe638dc45
+RUN apt-get update \
+    && apt-get install -y wget vim \
+    && mkdir ${LUMOS_DOCKER_DATA_DIR} \
+    && wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh -O ${LUMOS_DOCKER_DATA_DIR}/miniconda.sh \
+    && chmod +x ${LUMOS_DOCKER_DATA_DIR}/miniconda.sh \
+    && ${LUMOS_DOCKER_DATA_DIR}/miniconda.sh -b -p ${CONDA_DIR} \
+    && rm ${LUMOS_DOCKER_DATA_DIR}/miniconda.sh
+
+# Make conda command available
+ENV PATH=$CONDA_DIR/bin:$PATH
+RUN $CONDA_DIR/bin/conda init bash
+
+# Create conda environment
+# See: https://towardsdatascience.com/conda-pip-and-docker-ftw-d64fe638dc45
+COPY environment.yml /tmp/
+RUN conda create python=${LUMOS_DOCKER_PYTHON_VERSION} --name lumos \
+    # Make sure conda is activated in interactive shell via .bashrc
+    && echo "conda deactivate" >> ~/.bashrc \
+    && echo "conda activate lumos" >> ~/.bashrc
+
+# Activate env and install gcc --> for real production, we probably don't need this
+SHELL ["/bin/bash", "-c", "-i"]
+RUN conda activate lumos \
+    && conda env update --file /tmp/environment.yml \
+    && apt upgrade \
+    && apt install -y build-essential
+
+# TODO: too much hard-code?
+COPY docker/scripts/default_entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
