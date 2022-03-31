@@ -83,12 +83,8 @@ class TestTrackSweep(TestCase):
             result = {k: info[k] for k in COLUMNS_TO_EXTRACT}
             return result
 
-        results = pd.DataFrame()
-        for f in track_files:
-            result = _solve_with_track(f)
-            results = results.append(result, ignore_index=True)
-
         # Summary statistics
+        results = pd.DataFrame.from_records([_solve_with_track(f) for f in track_files])
         is_success = results["status"] == 0
         num_success = is_success.sum()
         summary = pd.DataFrame(
