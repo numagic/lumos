@@ -46,7 +46,6 @@ class TestLaptimeSimulationWithoutSolve(TestCase):
         ltc_config = LaptimeSimulation.get_sim_config(track="data/tracks/Catalunya.csv")
         model_config = ModelMaker.make_config("SimpleVehicleOnTrack")
         ltc = LaptimeSimulation(model_config=model_config, sim_config=ltc_config)
-        breakpoint()
         pass
 
     def test_change_track(self):

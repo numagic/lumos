@@ -30,7 +30,7 @@ class TestOCP(unittest.TestCase):
 
         def _set_and_assert(group: str, name: str, bound_vals: Tuple[Any]):
             new_bounds = (StageVarBoundConfig(group, name, bound_vals),)
-            self.ocp.set_bounds(new_bounds)
+            self.ocp.update_bounds(new_bounds)
             assert_array_equal(
                 self.ocp.get_lb(group=group, name=name),
                 bound_vals[0] * np.ones(self.ocp.num_stages),

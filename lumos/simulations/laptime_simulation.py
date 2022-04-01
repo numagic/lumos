@@ -129,6 +129,9 @@ class LaptimeSimulation(FixedMeshOCP):
         # need to add track related bounds on top of existing bounds.
         super().__init__(model=model, sim_config=sim_config, mesh_scale=1.0)
 
+        # Must record the boundary condtiions as otherwise we might overwrite them when
+        # we set the track variable bounds
+        self._bc_configs = sim_config.boundary_conditions
         self.set_track(sim_config.track)
 
     @property
@@ -140,6 +143,12 @@ class LaptimeSimulation(FixedMeshOCP):
 
         This is the method to overwrite if the user wants to create track from a
         different format.
+
+        We've made it possible to change track afte problem initiation mainly to save
+        jit overhead for jax models. But is this really worth it? Price we pay now:
+        - need to reconstruct continuity constarints
+        - need to store and reapply boundary conditions (and check for conflicts, eg
+        someone setting a starting offcenter position 10m for a track taht is 8m wide.)
         """
 
         # Create track object
@@ -161,6 +170,7 @@ class LaptimeSimulation(FixedMeshOCP):
         )
 
         self.update_bounds(track_bounds)
+        self.set_boundary_conditions(self._bc_configs)
 
     def _build_objective(self):
         # Common objective regardless of the problem
