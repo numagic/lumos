@@ -74,6 +74,9 @@ class FixedMeshOCP(ScaledMeshOCP):
         # Since for fixed grid, the continuity is just a linear constraint, we don't
         # actually need an input to get the jacobian. But we pass in one dummy here to
         # adhere to the signature of the parent method
+        # NOTE: since the jacobian value is cached, then if the problem changes
+        # (for example, when the mesh_scale changes), this continuity jacobian is no
+        # longer valid!
         continuity_cons = LinearConstraints(
             constraints=self._continuity_constraints,
             num_in=self.num_dec,
@@ -81,6 +84,7 @@ class FixedMeshOCP(ScaledMeshOCP):
             jacobian_value=self._continuity_jacobian(np.ones(self.num_dec)),
             jacobian_structure=self._continuity_jacobianstructure(),
         )
+
         self.add_constraints("continuity", continuity_cons)
 
     def _build_objective(self):

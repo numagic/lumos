@@ -1,6 +1,8 @@
 from unittest import TestCase
 
+from lumos.models.composition import ModelMaker
 from lumos.simulations.laptime_simulation import LTCConfig
+from lumos.simulations.laptime_simulation import LaptimeSimulation
 
 
 class TestLTCConfig(TestCase):
@@ -35,4 +37,19 @@ class TestLTCConfig(TestCase):
 
 
 # TODO: currently test_optimal_control/test_fixed_grid.py already tests LTC. Maybe we
-# should test that one with a dummy model, and test ltc here?
+# should test that one with a dummy model, and test ltc solve here?
+class TestLaptimeSimulationWithoutSolve(TestCase):
+    def setUp(self):
+        pass
+
+    def test_set_track(self):
+        ltc_config = LaptimeSimulation.get_sim_config(track="data/tracks/Catalunya.csv")
+        model_config = ModelMaker.make_config("SimpleVehicleOnTrack")
+        ltc = LaptimeSimulation(model_config=model_config, sim_config=ltc_config)
+        breakpoint()
+        pass
+
+    def test_change_track(self):
+        pass
+
+    pass

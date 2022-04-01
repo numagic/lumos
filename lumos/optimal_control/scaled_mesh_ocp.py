@@ -134,7 +134,8 @@ class ScaledMeshOCP(CompositeProblem):
             )
 
         # Set default varaible bounds and constraint bounds
-        self.set_bounds(sim_config.bounds)
+        self.set_default_bounds()
+        self.update_bounds(sim_config.bounds)
 
         # Set initial and final boundary conditions
         self.set_boundary_conditions(sim_config.boundary_conditions)
@@ -574,32 +575,35 @@ class ScaledMeshOCP(CompositeProblem):
 
         return rows[keep], cols[keep]
 
-    def set_bounds(self, bounds: Tuple[StageVarBoundConfig]):
-        """Setting variable bounds from StageVarBoundConfig."""
+    def set_default_bounds(self):
+        """Set default bounds of decision variables without external configs.
+        
+        For the base class, the default is set to be unbounded.
+        """
 
         # Create default (-inf, inf) bounds
-        dec_var_lb = {}
-        dec_var_ub = {}
-        for group in self.stage_var_groups:
-            shape = (self.num_stages, self.dec_var_operator.get_stage_var_size(group))
-            dec_var_lb[group] = -np.inf * np.ones(shape)
-            dec_var_ub[group] = np.inf * np.ones(shape)
+        self.lb = -np.inf * np.ones(self.num_dec)
+        self.ub = np.inf * np.ones(self.num_dec)
 
-        for name in self.global_var_names:
-            dec_var_lb[name] = -np.inf
-            dec_var_ub[name] = np.inf
+    def update_bounds(self, bounds: Tuple[StageVarBoundConfig]):
+        """Update variable bounds using bound configs.
+        
+        If bounds on the same varialbe are defined more than once, the later ones will
+        overwrite the earlier ones, so that only the last one will remain in effect.
+        """
 
         # Overwrite with external bound settings
+        op = self.dec_var_operator
         for b in bounds:
             lb, ub = b.values
             if isinstance(b, GlobalVarBoundConfig):
-                dec_var_lb[b.name] = lb
-                dec_var_ub[b.name] = ub
+                idx = op.get_global_var_index(b.name)
+                self.lb[idx] = lb
+                self.ub[idx] = ub
             elif isinstance(b, StageVarBoundConfig):
-                var_idx = self.dec_var_operator.get_var_index_in_group(
+                idx = self.dec_var_operator.get_var_index_in_dec(
                     group=b.group, name=b.name
                 )
-
                 # Convert scalar to array. Only need to check one bound as the
                 # StageVarBoundConfig ensure both are the same type
                 if np.isscalar(lb):
@@ -608,28 +612,12 @@ class ScaledMeshOCP(CompositeProblem):
                 else:
                     assert len(lb) == self.num_stages, (
                         f"OCP has {self.num_stages} stages, but got bounds for "
-                        f"{group}.{name} with size {len(lb)}"
+                        f"{b.group}.{b.name} with size {len(lb)}"
                     )
-
-                dec_var_lb[b.group][:, var_idx] = lb
-                dec_var_ub[b.group][:, var_idx] = ub
+                self.lb[idx] = lb
+                self.ub[idx] = ub
             else:
                 raise TypeError(f"Expected type BoundConfig but got {type(b)}")
-
-        self.lb = self.dec_var_operator.flatten_var(**dec_var_lb)
-        self.ub = self.dec_var_operator.flatten_var(**dec_var_ub)
-
-    def update_bound(self, group, name, bounds):
-        """TODO: merge this with set_bounds?"""
-        if group == "global":
-            idx = self.dec_var_operator.get_global_var_index(name)
-        else:
-            idx = [
-                self.dec_var_operator.get_var_index_in_dec(group, name, s)
-                for s in range(self.num_stages)
-            ]
-
-        self.lb[idx], self.ub[idx] = bounds
 
     def set_cons(self):
         # Set all constriants to equality
@@ -733,6 +721,15 @@ class ScaledMeshOCP(CompositeProblem):
                 for stage in range(self.num_stages)
             ]
         )
+
+    def todo_get_bounds(
+        self, full_bounds: np.ndarray, group: str, name: str,
+    ):
+        """Helper to retrieve the vector corresponding to one variable in lb"""
+
+        return full_bounds[
+            self.dec_var_oeprator.get_var_index_in_dec(group=group, name=name)
+        ]
 
     def get_lb(self, group: str, name: str):
         return self._get_bounds(self.lb, group=group, name=name)

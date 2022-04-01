@@ -1,7 +1,7 @@
 import logging
 from collections import namedtuple
 from enum import IntEnum
-from typing import Dict, List, NamedTuple, Tuple
+from typing import List, NamedTuple, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -297,23 +297,34 @@ class DecVarOperator:
     def get_global_var(self, x, name: str) -> float:
         return x[self.get_global_var_index(name)]
 
-    def get_var_index_in_dec(self, group: str, name: str, stage: int) -> int:
+    def get_var_index_in_dec(
+        self, group: str, name: str, stage: Optional[int] = None
+    ) -> Union[int, List[int]]:
         """Return the index of a variable in the decision var vector."""
-        if stage > self.num_stages - 1 or stage < -self.num_stages:
-            raise ValueError(
-                (
-                    f"stage must be bewteen [{-self.num_stages}, {self.num_stages-1}], "
-                    f"but got {stage}"
+
+        if stage is None:
+            # Stage not given, then provide it for all stages using recursion
+
+            return [
+                self.get_var_index_in_dec(group, name, stage)
+                for stage in range(self.num_stages)
+            ]
+
+        else:
+            if stage > self.num_stages - 1 or stage < -self.num_stages:
+                raise ValueError(
+                    (
+                        f"stage must be bewteen [{-self.num_stages}, {self.num_stages-1}], "
+                        f"but got {stage}"
+                    )
                 )
+            # allow negative index like python list
+            stage %= self.num_stages
+
+            return (
+                self._stage_var_enum[self._make_stage_var_name(group=group, name=name)]
+                + stage * self.num_var_stage
             )
-
-        # allow negative index like python list
-        stage %= self.num_stages
-
-        return (
-            self._stage_var_enum[self._make_stage_var_name(group=group, name=name)]
-            + stage * self.num_var_stage
-        )
 
     def get_group_indices_at_stage(self, group: str, stage: int) -> np.ndarray:
         """Return the index of a group of variable in the decision var vector."""

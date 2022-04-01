@@ -345,9 +345,9 @@ def main():
 
     # solve_distance_domain(dx, dy)
     solve_brachistochrone(dx, dy, backend="jax")
-    # solve_brachistochrone(dx, dy, backend="casadi")
-    # solve_brachistochrone(dx, dy, backend="custom")
-    # solve_brachistochrone(dx, dy, time_domain=False, backend="jax")
+    solve_brachistochrone(dx, dy, backend="casadi")
+    solve_brachistochrone(dx, dy, backend="custom")
+    solve_brachistochrone(dx, dy, time_domain=False, backend="jax")
 
 
 if __name__ == "__main__":

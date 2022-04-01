@@ -1,8 +1,13 @@
+from collections import namedtuple
 import unittest
 
 import numpy as np
 
-from lumos.optimal_control.utils import batch_conv1d, stack_and_increment
+from lumos.optimal_control.utils import (
+    DecVarOperator,
+    batch_conv1d,
+    stack_and_increment,
+)
 
 
 class TestBatchConv1d(unittest.TestCase):
@@ -75,3 +80,54 @@ class TestStackAndIncrement(unittest.TestCase):
         # Check increment is correct
         delta = np.diff(out, axis=axis)
         self.assertTrue(np.all(delta == num_increment))
+
+
+class TestDecVarOperator(unittest.TestCase):
+    num_intervals: int = 99
+    num_stages_per_interval: int = 3
+
+    def setUp(self):
+        self.num_stages = self.num_intervals * (self.num_stages_per_interval - 1) + 1
+
+        NameTuple = namedtuple(
+            "ModelIO", ["states", "inputs", "con_outputs", "residuals"]
+        )
+        model_var_names = NameTuple(
+            ["x", "y", "z"],
+            ["throttle", "steer"],
+            ["stability", "temperature"],
+            ["res0"],
+        )
+        self.op = DecVarOperator(
+            model_var_names=model_var_names,
+            num_intervals=self.num_intervals,
+            num_stages_per_interval=self.num_stages_per_interval,
+            stage_var_groups=("states", "inputs", "con_outputs", "residuals"),
+            global_var_names=("mesh_scale",),
+        )
+
+    def test_get_var_index_in_dec(self):
+        """Test getting the index of a variable at one stage or all stages."""
+
+        # Test positive stage
+        idx = self.op.get_var_index_in_dec("states", "y", stage=2)
+        expected_idx = 2 * 8 + 1
+        self.assertEqual(idx, expected_idx)
+
+        # Test negative stage
+        idx = self.op.get_var_index_in_dec("inputs", "steer", stage=-3)
+        expected_idx = (self.num_stages - 3) * 8 + 4
+        self.assertEqual(idx, expected_idx)
+
+        # Test wrong index
+        with self.assertRaises(ValueError):
+            idx = self.op.get_var_index_in_dec(
+                "inputs", "steer", stage=-self.num_stages - 1
+            )
+        with self.assertRaises(ValueError):
+            idx = self.op.get_var_index_in_dec("inputs", "steer", stage=self.num_stages)
+
+        # Test getting all stages
+        idx = self.op.get_var_index_in_dec("residuals", "res0")
+        expected_idx = 7 + np.arange(0, self.num_stages) * 8
+        np.testing.assert_array_equal(idx, expected_idx)

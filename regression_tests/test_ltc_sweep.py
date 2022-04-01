@@ -51,8 +51,7 @@ class TestTrackSweep(TestCase):
         )
 
         def _solve_with_track(track_file):
-            ocp._build_track_from_file(track_file)
-            ocp.update_track_bounds()
+            ocp.set_track(track_file)
 
             x0 = ocp.get_init_guess()
             logger.info(f"Starting solve for {track_file}")
