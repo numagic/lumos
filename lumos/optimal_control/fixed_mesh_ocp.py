@@ -40,9 +40,26 @@ class FixedMeshOCP(ScaledMeshOCP):
         # NOTE: we choose to make mesh_scale a variable instead of a config to make the
         # distinction of fixed_grid clearer!
         assert mesh_scale > 0.0, "mesh_scale must be a positive scalar!"
-        self._mesh_scale = mesh_scale
+        self.set_mesh_scale(mesh_scale)
 
         super().__init__(model=model, sim_config=sim_config)
+
+    def set_mesh_scale(self, mesh_scale: float):
+        """When we set the mesh_scale, some other properties must change"""
+        self._mesh_scale = mesh_scale
+
+        # The continuity constraints need to be built after the mesh_scale is set
+        # correctly. This is because it is a LinearConstraint which caches the jacobian
+        # value upon construction. So if we change mesh-scale, we need to update it.
+        # We must cope with both the initial construction (before constraints) and after
+        # constraints construction.
+        if (
+            hasattr(self, "_constraints")
+            and "continuity" in self._constraints
+            and isinstance(self._constraints["continuity"], LinearConstraints)
+        ):
+            _ = self._constraints.pop("continuity")
+            self._build_continuity_cons()
 
     def _get_mesh_scale(self, x):
         return self._mesh_scale

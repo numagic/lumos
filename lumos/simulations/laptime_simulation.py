@@ -124,6 +124,9 @@ class LaptimeSimulation(FixedMeshOCP):
         # This seems very dangerous
         model = SimpleVehicleOnTrack(params=model_params, model_config=model_config,)
 
+        # Set a dummy meshscale first, and update it later when we set the track.
+        # Unfortunately setting track must happen AFTER problem construction because we
+        # need to add track related bounds on top of existing bounds.
         super().__init__(model=model, sim_config=sim_config, mesh_scale=1.0)
 
         self.set_track(sim_config.track)
@@ -142,17 +145,8 @@ class LaptimeSimulation(FixedMeshOCP):
         # Create track object
         self._track = RaceTrack.from_tum_csv(track_file)
 
-        # update fixed mesh_scale
-        self._mesh_scale = self._track.total_distance
-
-        # HACK:
-        # The continuity constraints need to be built after the mesh_scale is set
-        # correctly. This is because it is a LinearConstraint which caches the jacobian
-        # value upon construction. So if we change mesh-scale, we need to update it.
-        # IDEAS: property set method for _mesh_scale?
-        self._mesh_scale = self._track.total_distance
-        _ = self._constraints.pop("continuity")
-        self._build_continuity_cons()
+        # update mesh_scale
+        self.set_mesh_scale(self._track.total_distance)
 
         # update variable bounds
         curvature = self._track.curvature_at(self.distance_mesh)
