@@ -58,8 +58,15 @@ class FixedMeshOCP(ScaledMeshOCP):
             and "continuity" in self._constraints
             and isinstance(self._constraints["continuity"], LinearConstraints)
         ):
-            _ = self._constraints.pop("continuity")
+            self.delete_constraints("continuity")
             self._build_continuity_cons()
+
+        # Condensed constraints also keeps a copy of the continuity con, so also needs
+        # update
+        if hasattr(self, "_constraints") and self.is_condensed:
+            self._build_continuity_cons()
+            self._con_storage["continuity"] = self._constraints["continuity"]
+            self.delete_constraints("continuity")
 
     def _get_mesh_scale(self, x):
         return self._mesh_scale

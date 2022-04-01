@@ -147,8 +147,9 @@ class LaptimeSimulation(FixedMeshOCP):
         We've made it possible to change track afte problem initiation mainly to save
         jit overhead for jax models. But is this really worth it? Price we pay now:
         - need to reconstruct continuity constarints
+        - need to reconstruct condensed constraints -> because it also has a copy of continuity
         - need to store and reapply boundary conditions (and check for conflicts, eg
-        someone setting a starting offcenter position 10m for a track taht is 8m wide.)
+        someone setting a starting offcenter position 10m for a track that is 8m wide.)
         """
 
         # Create track object
