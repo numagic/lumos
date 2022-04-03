@@ -213,13 +213,14 @@ class LinearConstraints(BaseConstraints):
         num_in: int,
         num_con: int,
         constraints: Callable,
-        jacobian_value: np.ndarray,
+        jacobian: Callable,
         jacobian_structure: Tuple[np.ndarray, np.ndarray],
+        cache_jacobian: bool = True,
     ):
         """A simplified IO for linear constraints.
 
         - no hessian is needed (default to empty)
-        - jacobian is constant
+        - jacobian is constant, so we get the option to cache it (default: True).
         """
 
         # Linear, so no hessian.
@@ -227,12 +228,18 @@ class LinearConstraints(BaseConstraints):
         hessian_structure = (np.array([], dtype=int), np.array([], dtype=int))
 
         # And jacobian is constant
-        jacobian = lambda x: jacobian_value
+        if cache_jacobian:
+            # Linear constriants allow us to compute the jacobian once and then cache it.
+            jac_val = jacobian(np.ones(num_in))
+            jacobian_to_use = lambda x: jac_val
+        else:
+            jacobian_to_use = jacobian
+
         super().__init__(
             num_in,
             num_con,
             constraints,
-            jacobian,
+            jacobian_to_use,
             hessian,
             jacobian_structure,
             hessian_structure,

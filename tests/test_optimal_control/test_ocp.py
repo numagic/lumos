@@ -25,32 +25,55 @@ class TestOCP(unittest.TestCase):
 
         cls.ocp = DroneSimulation(sim_config=cls.sim_config)
 
-    def test_set_bounds(self):
-        """Test corretly setting bounds or otherwise throwing error"""
+    def test_update_bounds(self):
+        """Test corretly updating bounds or otherwise throwing error"""
 
-        def _set_and_assert(group: str, name: str, bound_vals: Tuple[Any]):
+        def _udpate_and_assert(group: str, name: str, bound_vals: Tuple[Any]):
+            old_lb = self.ocp.lb
+            old_ub = self.ocp.ub
+
             new_bounds = (StageVarBoundConfig(group, name, bound_vals),)
-            self.ocp.set_bounds(new_bounds)
-            assert_array_equal(
-                self.ocp.get_lb(group=group, name=name),
-                bound_vals[0] * np.ones(self.ocp.num_stages),
-            )
+            self.ocp.update_bounds(new_bounds)
 
-            assert_array_equal(
-                self.ocp.get_ub(group=group, name=name),
-                bound_vals[1] * np.ones(self.ocp.num_stages),
-            )
+            op = self.ocp.dec_var_operator
+            for g in self.ocp.stage_var_groups:
+                for n in self.ocp.model.get_group_names(group):
+                    # Ensure bounds that need to change are changed.
+                    if g == group and n == name:
+                        # NOTE: here the multiply is broadcasted for scalar case, and
+                        # element-wise for array case (which makes no difference), but
+                        # both are correct
+                        assert_array_equal(
+                            self.ocp.get_lb(group=group, name=name),
+                            bound_vals[0] * np.ones(self.ocp.num_stages),
+                        )
+
+                        assert_array_equal(
+                            self.ocp.get_ub(group=group, name=name),
+                            bound_vals[1] * np.ones(self.ocp.num_stages),
+                        )
+                    else:
+                        # Ensure that other bounds are unmodified
+                        assert_array_equal(
+                            self.ocp.get_lb(group=group, name=name),
+                            op.get_var(old_lb, group=group, name=name),
+                        )
+
+                        assert_array_equal(
+                            self.ocp.get_ub(group=group, name=name),
+                            op.get_var(old_ub, group=group, name=name),
+                        )
 
         # Setting bounds with scalars
-        _set_and_assert(group="inputs", name="f", bound_vals=(-100, 100))
+        _udpate_and_assert(group="inputs", name="f", bound_vals=(-100, 100))
 
         # infeasible bound should throw an error
         with self.assertRaises(AssertionError):
-            _set_and_assert(group="outputs", name="sin_theta", bound_vals=(0.6, 0.5))
+            _udpate_and_assert(group="outputs", name="sin_theta", bound_vals=(0.6, 0.5))
 
         # Setting bounds with vectors
         _ones = np.ones(self.ocp.num_stages)
-        _set_and_assert(
+        _udpate_and_assert(
             group="inputs", name="omega", bound_vals=(-100 * _ones, 100 * _ones)
         )
 
@@ -59,18 +82,18 @@ class TestOCP(unittest.TestCase):
             ub = 200 * _ones
             lb = np.copy(ub)
             lb[10] += 1
-            _set_and_assert(group="states", name="z", bound_vals=(lb, ub))
+            _udpate_and_assert(group="states", name="z", bound_vals=(lb, ub))
 
         # Incorrect size should also throw an error
         with self.assertRaises(AssertionError):
             _wrong_ones = np.ones(self.ocp.num_stages + 1)
-            _set_and_assert(
+            _udpate_and_assert(
                 group="states", name="z", bound_vals=(-100 * _ones, 100 * _wrong_ones)
             )
 
         # Setting bounds with mixed scalar and vectors shoudl raise an error
         with self.assertRaises(TypeError):
-            _set_and_assert(group="states", name="x", bound_vals=(-200, 200 * _ones))
+            _udpate_and_assert(group="states", name="x", bound_vals=(-200, 200 * _ones))
 
         # TODO: Test set global var
 

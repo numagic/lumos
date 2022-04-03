@@ -1,0 +1,63 @@
+name: ltc-regression-test
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    # by default only opened, synchronize and reopened activity would trigger this event
+    # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
+    # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+    branches:
+      - 'main'
+
+jobs:
+  run-ltc-regression-test:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.9
+          auto-update-conda: true
+          environment-file: environment.yml
+      - name: Install lumos
+        run: python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
+      - name: Run LTC sweep
+        shell: bash -l {0}
+        # This would fail if pytest fails, and will write out result files if successful
+        run: python3 -m unittest regression_tests.test_ltc_sweep -v
+          # conda install -y pytest parameterized
+          # pytest regression_tests/ -v
+      - uses: actions/upload-artifact@v3
+        with:
+          path: results.csv
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v3
+        with:
+          path: summary.csv
+          if-no-files-found: error
+      # Download previous benchmark result from cache (if exists)
+      - name: Download previous benchmark data
+        # Only store reults and display if push to main
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}      
+        uses: actions/cache@v1
+        with:
+          path: ./cache
+          key: ${{ runner.os }}-benchmark
+      # Run `github-action-benchmark` action
+      - name: Store benchmark result
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: customSmallerIsBetter
+          # Where the output from the benchmark tool is stored
+          output-file-path: summary.json
+          # Workflow will fail when an alert happens
+          fail-on-alert: False             
+          # Set auto-push to false since GitHub API token is not given
+          auto-push: False
+          # Need to ensure external-data-json-path is not set, otherwise won't create
+          # gh-pages branch
+      - name: Push benchmark result
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}      
+        run: git push 'https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/numagic/lumos.git' gh-pages:gh-pages

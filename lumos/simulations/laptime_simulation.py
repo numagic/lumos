@@ -95,6 +95,9 @@ class LTCConfig(SimConfig):
             raise ValueError("A valid track file must be defined")
 
         # Ensure time and track heading are made non-cyclic.
+        # NOTE: somehow if we make track_curvature also non_cyclic, convergence got
+        # a lot worse. This is counterintuitive as one would imagine the track curvature
+        # from finite difference isn't actually cyclic! (but it's close, ~1e-5 delta)
         for name in ["states.time", "inputs.track_heading"]:
             if name not in self.non_cyclic_vars:
                 logger.warning(
@@ -113,28 +116,49 @@ class LaptimeSimulation(FixedMeshOCP):
         sim_config: Dict[str, Any] = None,
     ):
 
-        self._build_track_from_file(sim_config.track)
-
+        # The correct mesh_scale must be given here, otherwise the solve would fail
+        # This is because we use LinearConstraints for the continuity here
+        # which caches the jacobian upon initialization! So the continuity constraints
+        # would have been initialized with the wrong total mesh_scale if we didn't pass
+        # it in during construction time!
+        # This seems very dangerous
         model = SimpleVehicleOnTrack(params=model_params, model_config=model_config,)
 
-        super().__init__(
-            model=model, sim_config=sim_config, mesh_scale=self._track.total_distance
-        )
+        # Set a dummy meshscale first, and update it later when we set the track.
+        # Unfortunately setting track must happen AFTER problem construction because we
+        # need to add track related bounds on top of existing bounds.
+        super().__init__(model=model, sim_config=sim_config, mesh_scale=1.0)
+
+        # Must record the boundary condtiions as otherwise we might overwrite them when
+        # we set the track variable bounds
+        self._bc_configs = sim_config.boundary_conditions
+        self.set_track(sim_config.track)
 
     @property
     def distance_mesh(self):
         return self._flat_normalized_mesh * self._track.total_distance
 
-    def _build_track_from_file(self, track_file):
-        """Build a track private property from a track file
+    def set_track(self, track_file):
+        """Set the track and update the variable bounds accordingly.
 
         This is the method to overwrite if the user wants to create track from a
         different format.
+
+        We've made it possible to change track afte problem initiation mainly to save
+        jit overhead for jax models. But is this really worth it? Price we pay now:
+        - need to reconstruct continuity constarints
+        - need to reconstruct condensed constraints -> because it also has a copy of continuity
+        - need to store and reapply boundary conditions (and check for conflicts, eg
+        someone setting a starting offcenter position 10m for a track that is 8m wide.)
         """
+
+        # Create track object
         self._track = RaceTrack.from_tum_csv(track_file)
 
-    def set_bounds(self, bounds: Tuple[StageVarBoundConfig]):
-        """Override the base class method by adding fixed varialbe bounds to track properties"""
+        # update mesh_scale
+        self.set_mesh_scale(self._track.total_distance)
+
+        # update variable bounds
         curvature = self._track.curvature_at(self.distance_mesh)
         heading = self._track.heading_at(self.distance_mesh)
         left_distance = self._track.left_distance_at(self.distance_mesh)
@@ -146,7 +170,8 @@ class LaptimeSimulation(FixedMeshOCP):
             StageVarBoundConfig("states", "n", (-right_distance, left_distance)),
         )
 
-        super().set_bounds(bounds + track_bounds)
+        self.update_bounds(track_bounds)
+        self.set_boundary_conditions(self._bc_configs)
 
     def _build_objective(self):
         # Common objective regardless of the problem
