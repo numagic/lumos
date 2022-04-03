@@ -1,6 +1,7 @@
 from unittest import TestCase
 
 from lumos.models.composition import ModelMaker
+from lumos.models.tracks import RaceTrack
 from lumos.simulations.laptime_simulation import LTCConfig
 from lumos.simulations.laptime_simulation import LaptimeSimulation
 
@@ -39,16 +40,20 @@ class TestLTCConfig(TestCase):
 # TODO: currently test_optimal_control/test_fixed_grid.py already tests LTC. Maybe we
 # should test that one with a dummy model, and test ltc solve here?
 class TestLaptimeSimulationWithoutSolve(TestCase):
-    def setUp(self):
-        pass
+    def test_set_and_change_track(self):
+        """Test if the ocp property linked to the track is updated correctly."""
+        track_file = "data/tracks/Catalunya.csv"
+        track = RaceTrack.from_tum_csv(track_file)
 
-    def test_set_track(self):
-        ltc_config = LaptimeSimulation.get_sim_config(track="data/tracks/Catalunya.csv")
+        ltc_config = LaptimeSimulation.get_sim_config(track=track_file)
         model_config = ModelMaker.make_config("SimpleVehicleOnTrack")
         ltc = LaptimeSimulation(model_config=model_config, sim_config=ltc_config)
-        pass
 
-    def test_change_track(self):
-        pass
+        # Make sure the track length is correct
+        self.assertAlmostEqual(ltc._mesh_scale, track.total_distance)
 
-    pass
+        # Change track and ensure that the distance is correctly updated.
+        track_file = "data/tracks/Silverstone.csv"
+        track = RaceTrack.from_tum_csv(track_file)
+        ltc.set_track(track_file)
+        self.assertAlmostEqual(ltc._mesh_scale, track.total_distance)

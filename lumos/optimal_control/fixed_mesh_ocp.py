@@ -46,27 +46,9 @@ class FixedMeshOCP(ScaledMeshOCP):
 
     def set_mesh_scale(self, mesh_scale: float):
         """When we set the mesh_scale, some other properties must change"""
+
+        # Currently we don't need to update anything else, but in the future we might.
         self._mesh_scale = mesh_scale
-
-        # The continuity constraints need to be built after the mesh_scale is set
-        # correctly. This is because it is a LinearConstraint which caches the jacobian
-        # value upon construction. So if we change mesh-scale, we need to update it.
-        # We must cope with both the initial construction (before constraints) and after
-        # constraints construction.
-        if (
-            hasattr(self, "_constraints")
-            and "continuity" in self._constraints
-            and isinstance(self._constraints["continuity"], LinearConstraints)
-        ):
-            self.delete_constraints("continuity")
-            self._build_continuity_cons()
-
-        # Condensed constraints also keeps a copy of the continuity con, so also needs
-        # update
-        if hasattr(self, "_constraints") and self.is_condensed:
-            self._build_continuity_cons()
-            self._con_storage["continuity"] = self._constraints["continuity"]
-            self.delete_constraints("continuity")
 
     def _get_mesh_scale(self, x):
         return self._mesh_scale
@@ -95,18 +77,25 @@ class FixedMeshOCP(ScaledMeshOCP):
         return grad
 
     def _build_continuity_cons(self):
-        # Since for fixed grid, the continuity is just a linear constraint, we don't
-        # actually need an input to get the jacobian. But we pass in one dummy here to
-        # adhere to the signature of the parent method
-        # NOTE: since the jacobian value is cached, then if the problem changes
-        # (for example, when the mesh_scale changes), this continuity jacobian is no
-        # longer valid!
+        """Overwrite base class to create linear constraints for continiuty.
+        
+        Since for fixed grid, the continuity is just a linear constraint. 
+
+        However here we do not cache the jacobian, because when the jacobian value is
+        cached, then if the problem changes (for example, when the mesh_scale changes), this continuity jacobian is no
+        longer valid!
+        
+        The performance cost is < 1ms per call for 250 intervals with 3 stages per
+        interval, so pretty much negligible for any problem with a non-trivial model.
+        """
+
         continuity_cons = LinearConstraints(
             constraints=self._continuity_constraints,
             num_in=self.num_dec,
             num_con=self.num_total_con_interval,
-            jacobian_value=self._continuity_jacobian(np.ones(self.num_dec)),
+            jacobian=self._continuity_jacobian,
             jacobian_structure=self._continuity_jacobianstructure(),
+            cache_jacobian=False,
         )
 
         self.add_constraints("continuity", continuity_cons)

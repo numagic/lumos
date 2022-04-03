@@ -218,6 +218,14 @@ class TestLaptimeSimulation(unittest.TestCase):
         """Test that continuity constraints is linear and with correct jacobian"""
         self._test_linear_constraints(self.ocp._constraints["continuity"])
 
+        # Test the linear constraint for continuity is still valid after changing
+        # mesh_scale - this is only true if we don't cache the jacobian. If we cache the
+        # jacobian (in FixedMeshOCP._build_continuity_cons), then it would fail.
+        original_mesh_scale = self.ocp._mesh_scale
+        self.ocp.set_mesh_scale(original_mesh_scale * 2.0)
+        self._test_linear_constraints(self.ocp._constraints["continuity"])
+        self.ocp.set_mesh_scale(original_mesh_scale)
+
     def test_cyclic_constraints(self):
         """Test cyclic constraints is linear and really cyclic"""
         cyclic_con = self.ocp._constraints["cyclic"]

@@ -129,5 +129,5 @@ class TestDecVarOperator(unittest.TestCase):
 
         # Test getting all stages
         idx = self.op.get_var_index_in_dec("residuals", "res0")
-        expected_idx = 7 + np.arange(0, self.num_stages) * 8
+        expected_idx = 7 + np.arange(self.num_stages) * 8
         np.testing.assert_array_equal(idx, expected_idx)

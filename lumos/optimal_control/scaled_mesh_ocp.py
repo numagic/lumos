@@ -619,11 +619,6 @@ class ScaledMeshOCP(CompositeProblem):
             else:
                 raise TypeError(f"Expected type BoundConfig but got {type(b)}")
 
-    def set_cons(self):
-        # Set all constriants to equality
-        self.cl = np.zeros(self.num_con)
-        self.cu = np.zeros(self.num_con)
-
     def _set_scales(self, scales: Dict[str, Dict[str, float]]):
         """Construct variable scales
 
@@ -703,39 +698,11 @@ class ScaledMeshOCP(CompositeProblem):
         self.cl = np.zeros(self.num_con)
         self.cu = np.zeros(self.num_con)
 
-    # TODO:
-    # 1) should we unify the get_var_index for model and OCP?
-    # 2) should we move these methods inside OCP? -> let's do this when other users use it
-    # as well.
-    def _get_bounds(
-        self, full_bounds: np.ndarray, group: str, name: str,
-    ):
-        """Helper to retrieve the vector corresponding to one variable in lb"""
-        return np.array(
-            [
-                full_bounds[
-                    self.dec_var_operator.get_var_index_in_dec(
-                        group=group, name=name, stage=stage
-                    )
-                ]
-                for stage in range(self.num_stages)
-            ]
-        )
-
-    def todo_get_bounds(
-        self, full_bounds: np.ndarray, group: str, name: str,
-    ):
-        """Helper to retrieve the vector corresponding to one variable in lb"""
-
-        return full_bounds[
-            self.dec_var_oeprator.get_var_index_in_dec(group=group, name=name)
-        ]
-
     def get_lb(self, group: str, name: str):
-        return self._get_bounds(self.lb, group=group, name=name)
+        return self.dec_var_operator.get_var(self.lb, group=group, name=name)
 
     def get_ub(self, group: str, name: str):
-        return self._get_bounds(self.ub, group=group, name=name)
+        return self.dec_var_operator.get_var(self.ub, group=group, name=name)
 
     def _initialize_logging(self):
         """Create directory and storage for logging"""
@@ -968,7 +935,7 @@ class ScaledMeshOCP(CompositeProblem):
         idx_initial, idx_final = self._get_cyclic_indices()
         return x[idx_initial] - x[idx_final]
 
-    def _cyclic_jacobian(self):
+    def _cyclic_jacobian(self, x):
         idx_initial, idx_final = self._get_cyclic_indices()
         return np.hstack([np.ones_like(idx_initial), -np.ones_like(idx_final)])
 
@@ -1248,7 +1215,7 @@ class ScaledMeshOCP(CompositeProblem):
             num_in=self.num_dec,
             num_con=len(self._cyclic_vars),
             constraints=self._cyclic_constraint,
-            jacobian_value=self._cyclic_jacobian(),
+            jacobian=self._cyclic_jacobian,
             jacobian_structure=self._cyclic_jacobianstructure(),
         )
         self.add_constraints("cyclic", cyclic_con)
