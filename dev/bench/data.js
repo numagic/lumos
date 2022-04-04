@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1649022143167,
+  "lastUpdate": 1649059362248,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -143,6 +143,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "avg_success_iter",
             "value": 50.92,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "yunlong@numagic.io",
+            "name": "yunlongxu",
+            "username": "yunlongxu-numagic"
+          },
+          "committer": {
+            "email": "92360845+yunlongxu-numagic@users.noreply.github.com",
+            "name": "Yunlong Xu",
+            "username": "yunlongxu-numagic"
+          },
+          "distinct": true,
+          "id": "a0ba303775ea77488a818330b6c70cf0806b4806",
+          "message": "test benchmark: tighten tolerance to 1e-6\n\n- should see an increase in iterations used and perhaps also failure\nrate",
+          "timestamp": "2022-04-04T09:49:17+02:00",
+          "tree_id": "0efc1e9cd6d377ef6626a0039749cab42a7dfcef",
+          "url": "https://github.com/numagic/lumos/commit/a0ba303775ea77488a818330b6c70cf0806b4806"
+        },
+        "date": 1649059361815,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "num_total",
+            "value": 7,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 72,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 55.857142857142854,
             "unit": "iter"
           }
         ]
