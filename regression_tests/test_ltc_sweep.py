@@ -62,8 +62,8 @@ class TestTrackSweep(TestCase):
                 print_timing_statistics="yes",
                 print_info_string="yes",
                 derivative_test="none",
-                dual_inf_tol=1e-4,
-                constr_viol_tol=1e-4,
+                dual_inf_tol=1e-3,
+                constr_viol_tol=1e-3,
             )
             info["laptime"] = ocp.dec_var_operator.get_var(
                 solution, group="states", name="time", stage=-1
