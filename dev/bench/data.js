@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1649059362248,
+  "lastUpdate": 1649061997912,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -182,6 +182,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "avg_success_iter",
             "value": 55.857142857142854,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "yunlong@numagic.io",
+            "name": "yunlongxu",
+            "username": "yunlongxu-numagic"
+          },
+          "committer": {
+            "email": "92360845+yunlongxu-numagic@users.noreply.github.com",
+            "name": "Yunlong Xu",
+            "username": "yunlongxu-numagic"
+          },
+          "distinct": true,
+          "id": "8f8c39cc9c75bbb181dbc6bd628bd32f19d2204c",
+          "message": "fix benchmark bug and test with tolerance 1e-4\n\n- saw lots of restoration failure with 1e-6 tolerance",
+          "timestamp": "2022-04-04T10:32:42+02:00",
+          "tree_id": "a6e3f7ccd1941d3aa7efd36504fb389964b6edee",
+          "url": "https://github.com/numagic/lumos/commit/8f8c39cc9c75bbb181dbc6bd628bd32f19d2204c"
+        },
+        "date": 1649061997466,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "num_total",
+            "value": 25,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 12,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 53.95454545454545,
             "unit": "iter"
           }
         ]
