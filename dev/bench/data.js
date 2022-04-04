@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1649061997912,
+  "lastUpdate": 1649063477045,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -221,6 +221,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "avg_success_iter",
             "value": 53.95454545454545,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "yunlong@numagic.io",
+            "name": "yunlongxu",
+            "username": "yunlongxu-numagic"
+          },
+          "committer": {
+            "email": "92360845+yunlongxu-numagic@users.noreply.github.com",
+            "name": "Yunlong Xu",
+            "username": "yunlongxu-numagic"
+          },
+          "distinct": true,
+          "id": "7632fddbdd73af7dae0d4c63faccf106d3c5b2fd",
+          "message": "experiment: restore original tolerance\n\n- should see benchmark numbers return to original values",
+          "timestamp": "2022-04-04T11:02:11+02:00",
+          "tree_id": "aa0dad9ffe2333fcf907689bb0b88cfebd6c3cb1",
+          "url": "https://github.com/numagic/lumos/commit/7632fddbdd73af7dae0d4c63faccf106d3c5b2fd"
+        },
+        "date": 1649063475985,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "num_total",
+            "value": 25,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 0,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 50.92,
             "unit": "iter"
           }
         ]
