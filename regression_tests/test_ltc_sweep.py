@@ -62,8 +62,8 @@ class TestTrackSweep(TestCase):
                 print_timing_statistics="yes",
                 print_info_string="yes",
                 derivative_test="none",
-                dual_inf_tol=1e-6,
-                constr_viol_tol=1e-6,
+                dual_inf_tol=1e-4,
+                constr_viol_tol=1e-4,
             )
             info["laptime"] = ocp.dec_var_operator.get_var(
                 solution, group="states", name="time", stage=-1
@@ -108,7 +108,7 @@ class TestTrackSweep(TestCase):
         # See: https://github.com/benchmark-action/github-action-benchmark
         # using customSmallerIsBetter, so need to make metrics also better when smaller
         metrics = [
-            _create_metric("num_total", "-", int(num_success)),
+            _create_metric("num_total", "-", len(results)),
             _create_metric("failure_pct", "%", (1 - num_success / len(results)) * 100),
             _create_metric(
                 "avg_success_iter", "iter", results.loc[is_success, "num_iter"].mean()
