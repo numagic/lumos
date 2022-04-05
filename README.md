@@ -28,6 +28,11 @@ from typing import Any, Dict
 
 import lumos.numpy as lnp
 from lumos.models.base import StateSpaceModel, StateSpaceModelReturn, state_space_io
+from lumos.optimal_control.config import (
+    BoundaryConditionConfig,
+    StageVarBoundConfig,
+    GlobalVarBoundConfig,
+)
 from lumos.optimal_control.scaled_mesh_ocp import ScaledMeshOCP
 
 # Create a model
@@ -67,11 +72,17 @@ class TimeModel(StateSpaceModel):
 # Set up the model and the problem
 model = TimeModel()
 sim_config = ScaledMeshOCP.get_sim_config(
-    boundary_conditions={
-        "initial_states": {"x": 0.0, "y": 0.0, "v": 0.0},
-        "final_states": {"x": 1.0, "y": -0.65},
-    },
-    bounds={"mesh_scale": (0, 10.0), "inputs": {"theta": (-np.pi / 2, np.pi / 2)}},
+    boundary_conditions=(
+        BoundaryConditionConfig(0, "states", "x", 0.0),
+        BoundaryConditionConfig(0, "states", "y", 0.0),
+        BoundaryConditionConfig(0, "states", "v", 0.0),
+        BoundaryConditionConfig(-1, "states", "x", 1.0),
+        BoundaryConditionConfig(-1, "states", "y", -0.6),
+    ),
+    bounds=(
+        GlobalVarBoundConfig("mesh_scale", (0.01, 10.0)),
+        StageVarBoundConfig("inputs", "theta", (-np.pi / 2, np.pi / 2)),
+    ),
     num_intervals=49,
     hessian_approximation="exact",
 )
