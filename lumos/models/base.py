@@ -11,7 +11,7 @@ import numpy as np
 from jax import jit, vmap
 
 import lumos.numpy as lnp
-from lumos.optimal_control.nlp import BaseConstraints, JaxConstraints, CasConstraints
+from lumos.optimal_control.nlp import MappedConstraints, JaxConstraints, CasConstraints
 from lumos.models.composition import CompositeModel
 from lumos.optimal_control.nlp import CasConstraints, JaxConstraints
 
@@ -500,7 +500,7 @@ class StateSpaceModel(Model):
             "hessian_structure": self._implicit_hessianstructure(),
         }
 
-        self.model_algebra = BaseConstraints(
+        self.model_algebra = MappedConstraints(
             num_in=self.num_implicit_var,
             num_con=self.num_implicit_res,
             **implicit_functions,

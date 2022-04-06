@@ -47,13 +47,6 @@ def _make_lagrangian(constraints: Callable) -> Callable:
 
 
 class BaseConstraints:
-    map_func: Callable = staticmethod(lmap)
-    map_args: Dict[str, Dict[str, Any]] = {
-        "constraints": {"in_axes": [0, 0, None]},
-        "jacobian": {"in_axes": [0, 0, None]},
-        "hessian": {"in_axes": [0, 0, None, 0]},
-    }
-
     def __init__(
         self,
         num_in: int,
@@ -80,9 +73,9 @@ class BaseConstraints:
         # NOTE: we use a lot of monkey patch, is it controversial?
         self.num_in = num_in
         self.num_con = num_con
-        self.constraints = constraints
-        self.jacobian = jacobian
-        self.hessian = hessian
+        self._constraints = constraints
+        self._jacobian = jacobian
+        self._hessian = hessian
 
         # Additional sparsity inside each block
         if jacobian_structure is None:
@@ -103,20 +96,19 @@ class BaseConstraints:
             self.has_hessian_sparsity = True
             self._hessian_structure = hessian_structure
 
-        # HACK: the input signature is actually prety clear (var, mesh, params), should we
-        # make them explicitly clear and rule out other useages? (which we could support
-        # but we make it clear we don't suppor them now)
+        # HACK: no inputs wired yet, just set the default
+        self.set_con_scales()
 
-        # Create mapped functions
-        self.mapped_constraints = self.map_func(
-            self.constraints, **self.map_args["constraints"]
-        )
-        self.mapped_jacobian = self.map_func(self.jacobian, **self.map_args["jacobian"])
-        # HACK: in_axes args are different for hessian. And potentially should align with
-        # the functions? (num of arguments, and order)
-        # For the model func, as soon as the unit func are decided, the in_axes are also
-        # decided. So these are decided inside model.base
-        self.mapped_hessian = self.map_func(self.hessian, **self.map_args["hessian"])
+    def constraints(self, x):
+        return self._constraints(x) / self._con_scales
+
+    def jacobian(self, x):
+        return self._jacobian(x) / self._jac_scales
+
+    def hessian(self, x, lagrange):
+        # Scaling the contribution of the constraints to the hessian is equivalent to
+        # scaling the lagrangian multipliers corresponding to the constraints
+        return self._hessian(x, lagrange / self._con_scales)
 
     def jacobianstructure(self):
         return self._jacobian_structure
@@ -140,6 +132,16 @@ class BaseConstraints:
             (vals.ravel(), (rows.ravel(), cols.ravel())), shape=self.hess_shape
         )
 
+    def set_con_scales(self, scales: Optional[np.ndarray] = None):
+        if scales:
+            self._con_scales = scales
+        else:
+            self._con_scales = np.ones(self.num_con)
+
+        # update jacobian value scales.
+        rows, cols = self.jacobianstructure()
+        self._jac_scales = self._con_scales[rows]
+
     @property
     def jac_shape(self):
         return (self.num_con, self.num_in)
@@ -149,7 +151,53 @@ class BaseConstraints:
         return (self.num_in, self.num_in)
 
 
-class JaxConstraints(BaseConstraints):
+class MappedConstraints(BaseConstraints):
+    map_func: Callable = staticmethod(lmap)
+    map_args: Dict[str, Dict[str, Any]] = {
+        "constraints": {"in_axes": [0, 0, None]},
+        "jacobian": {"in_axes": [0, 0, None]},
+        "hessian": {"in_axes": [0, 0, None, 0]},
+    }
+
+    def __init__(
+        self,
+        num_in: int,
+        num_con: int,
+        constraints: Callable,
+        jacobian: Callable,
+        hessian: Callable,
+        jacobian_structure: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+        hessian_structure: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+    ):
+        super().__init__(
+            num_in,
+            num_con,
+            constraints,
+            jacobian,
+            hessian,
+            jacobian_structure,
+            hessian_structure,
+        )
+
+        # HACK: the input signature is actually prety clear (var, mesh, params), should we
+        # make them explicitly clear and rule out other useages? (which we could support
+        # but we make it clear we don't suppor them now)
+
+        # Create mapped functions
+        self.mapped_constraints = self.map_func(
+            self._constraints, **self.map_args["constraints"]
+        )
+        self.mapped_jacobian = self.map_func(
+            self._jacobian, **self.map_args["jacobian"]
+        )
+        # HACK: in_axes args are different for hessian. And potentially should align with
+        # the functions? (num of arguments, and order)
+        # For the model func, as soon as the unit func are decided, the in_axes are also
+        # decided. So these are decided inside model.base
+        self.mapped_hessian = self.map_func(self._hessian, **self.map_args["hessian"])
+
+
+class JaxConstraints(MappedConstraints):
     map_func: Callable = staticmethod(jax.vmap)
 
     def __init__(
@@ -198,7 +246,7 @@ class JaxConstraints(BaseConstraints):
         self.mapped_hessian = lnp.use_backend("jax")(jax.jit(self.mapped_hessian))
 
 
-class CasConstraints(BaseConstraints):
+class CasConstraints(MappedConstraints):
     map_func: Callable = staticmethod(cmap)
     map_args: Dict[str, Dict[str, Any]] = {
         "constraints": {"in_axes": [0, 0, None], "sparse": False, "num_workers": 32},
@@ -451,7 +499,7 @@ class CompositeProblem(NLPFunction):
         # NOTE: These must be instance properties. If they are class properties, then
         # the CompositeProblem would behave like a singleton, so if you instantiate one
         # ocp after another, it would keep adding ConvProllem to it!
-        self._constraints: Dict[str, List[BaseConstraints]] = {}
+        self._constraints: Dict[str, List[MappedConstraints]] = {}
         self._objectives: Dict[str, List[BaseObjective]] = {}
         self._idx_triu: np.ndarray = (
             None  # index of upper triangular entries in the hessian.
@@ -464,7 +512,7 @@ class CompositeProblem(NLPFunction):
         # https://github.com/mechmotum/cyipopt/blob/d6841beacb46a340b4c88465159dab9724ee156e/cyipopt/cython/ipopt_wrapper.pyx#L306
         return sum(p.num_con for p in self._constraints.values())
 
-    def add_constraints(self, name: str, c: BaseConstraints):
+    def add_constraints(self, name: str, c: MappedConstraints):
         if name in self._constraints:
             raise ValueError(
                 f"{name} already exists in defined constraints. Please change to a new name.",

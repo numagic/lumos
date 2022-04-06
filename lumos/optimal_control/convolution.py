@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict
 
 import numpy as np
 
-from lumos.optimal_control.nlp import BaseConstraints, CasConstraints
+from lumos.optimal_control.nlp import MappedConstraints, CasConstraints
 from lumos.optimal_control.utils import (
     DecVarOperator,
     batch_conv1d,
@@ -10,10 +10,10 @@ from lumos.optimal_control.utils import (
 )
 
 
-class ConvConstraints(BaseConstraints):
+class ConvConstraints(MappedConstraints):
     def __init__(
         self,
-        unit_problem: BaseConstraints,
+        unit_problem: MappedConstraints,
         dec_var_op: DecVarOperator,
         normalized_mesh: np.ndarray,
         mesh_scale_fn: Callable,
@@ -78,11 +78,7 @@ class ConvConstraints(BaseConstraints):
         if not (self._op.num_global_var == 0):
             x = x[: -self._op.num_global_var]
 
-        return batch_conv1d(
-            x,
-            width=self._width,
-            stride=self._stride,
-        )
+        return batch_conv1d(x, width=self._width, stride=self._stride,)
 
     def _get_mesh(self, x):
         return self._normalized_mesh * self._mesh_scale_fn(x)
