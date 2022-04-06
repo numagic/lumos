@@ -234,7 +234,6 @@ class StateSpaceModel(Model):
     ):
         super().__init__(model_config=model_config, params=params)
         self._check_names()
-        self._set_default_scales()
 
     @abstractmethod
     def forward(
@@ -294,27 +293,6 @@ class StateSpaceModel(Model):
     def get_state(self, states: lnp.ndarray, name: str) -> float:
         return states[self.get_var_index(group="states", name=name)]
 
-    def _set_default_scales(self):
-        """Set default scales of all implicit input groups to 1"""
-        # Create default scales of 1 for everything
-        self._scales = {}
-        for group in self._implicit_inputs:
-            self._scales[group] = self.make_const_vector(group, 1.0)
-
-    def set_scales(self, scales: Optional[Dict[str, Dict[str, float]]] = None):
-        # TODO: we should add a check here to warn the user say, a name of "Vx" is used
-        # where it should be "vx". As it is now, that would simply be ignored, which is
-        # not very transparent to the user.
-        for group, group_scales in scales.items():
-            for name, val in group_scales.items():
-                self._scales[group][self.get_var_index(group, name)] = val
-
-    def get_group_scales(self, group: str) -> Dict[str, float]:
-        return self._scales[group]
-
-    def get_var_scale(self, group: str, name: str) -> float:
-        return self._scales[group][self.get_var_index(group, name)]
-
     def implicit(
         self,
         states: lnp.ndarray,
@@ -348,10 +326,8 @@ class StateSpaceModel(Model):
         # FIXME: residuals are not scaled yet
         res = lnp.vector_concat(
             [
-                (model_return.states_dot - states_dot)
-                / self.get_group_scales("states"),
-                (model_return.con_outputs - con_outputs)
-                / self.get_group_scales("con_outputs"),
+                model_return.states_dot - states_dot,
+                model_return.con_outputs - con_outputs,
                 model_return.residuals,
             ]
         )

@@ -24,7 +24,7 @@ def main():
         num_intervals=250,
         hessian_approximation="exact",
         is_cyclic=is_cyclic,
-        is_condensed=False,
+        is_condensed=True,
         backend="casadi",
         track=track_file,
         transcription="LGR",

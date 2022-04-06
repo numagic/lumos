@@ -88,7 +88,6 @@ class TestFixedDistanceCondensed(unittest.TestCase):
                 self.ocp.transcription.continuity_con(
                     states[interval], states_dot[interval], interval_length[interval]
                 )
-                / self.ocp.model.get_group_scales("states")
             )
         continuity_cons = np.stack(continuity_cons).ravel()
 
