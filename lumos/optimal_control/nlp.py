@@ -108,6 +108,7 @@ class BaseConstraints:
     def hessian(self, x, lagrange):
         # Scaling the contribution of the constraints to the hessian is equivalent to
         # scaling the lagrangian multipliers corresponding to the constraints
+
         return self._hessian(x, lagrange / self._con_scales)
 
     def jacobianstructure(self):
@@ -133,7 +134,7 @@ class BaseConstraints:
         )
 
     def set_con_scales(self, scales: Optional[np.ndarray] = None):
-        if scales:
+        if scales is not None:
             self._con_scales = scales
         else:
             self._con_scales = np.ones(self.num_con)

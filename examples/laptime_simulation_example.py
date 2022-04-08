@@ -6,6 +6,7 @@ import numpy as np
 from lumos.models.composition import ModelMaker
 from lumos.models.simple_vehicle_on_track import SimpleVehicleOnTrack
 from lumos.models.tires.utils import create_params_from_tir_file
+from lumos.optimal_control.config import GlobalVarScaleConfig, StageVarScaleConfig
 from lumos.simulations.laptime_simulation import LaptimeSimulation
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,18 @@ def main():
         backend="casadi",
         track=track_file,
         transcription="LGR",
+        scales=(
+            StageVarScaleConfig("states", "time", 10.0),
+            StageVarScaleConfig("states", "vx", 10.0),
+            StageVarScaleConfig("states", "wheel_speed_fl", 10.0),
+            StageVarScaleConfig("states", "wheel_speed_fr", 10.0),
+            StageVarScaleConfig("states", "wheel_speed_rl", 10.0),
+            StageVarScaleConfig("states", "wheel_speed_rr", 10.0),
+            StageVarScaleConfig("states_dot", "wheel_speed_fl_dot", 10.0),
+            StageVarScaleConfig("states_dot", "wheel_speed_fr_dot", 10.0),
+            StageVarScaleConfig("states_dot", "wheel_speed_rl_dot", 10.0),
+            StageVarScaleConfig("states_dot", "wheel_speed_rr_dot", 10.0),
+        ),
         # boundary_conditions=get_default_boundary_conditions(is_cyclic),
         # bounds=get_default_bounds(),
         logging_config={

@@ -20,6 +20,9 @@ from lumos.optimal_control.nlp import (
 )
 from lumos.optimal_control.config import (
     BoundaryConditionConfig,
+    StageVarScaleConfig,
+    GlobalVarScaleConfig,
+    ScaleConfig,
     StageVarBoundConfig,
     GlobalVarBoundConfig,
     SimConfig,
@@ -109,9 +112,6 @@ class ScaledMeshOCP(CompositeProblem):
         self._logging_dir: str = None
         self._initialize_logging()
 
-        # Set up scaling, scaling must be set up before the nlp function set up, because
-        # they need to be baked into the residual computations.
-        self._set_scales(sim_config.scales)
         self.model.make_model_algebra_cons(self.backend)
 
         # NOTE: here it is mega dangerous that if we keep appending ConvProlbme to the
@@ -142,6 +142,9 @@ class ScaledMeshOCP(CompositeProblem):
 
         # Set the constraint upper and lower bounds.
         self.set_cons()
+
+        # Set up scaling
+        self._set_scales(sim_config.scales)
 
     @classmethod
     def get_sim_config(cls, *args, **kwargs) -> SimConfig:
@@ -588,9 +591,7 @@ class ScaledMeshOCP(CompositeProblem):
                 self.lb[idx] = lb
                 self.ub[idx] = ub
             elif isinstance(b, StageVarBoundConfig):
-                idx = self.dec_var_operator.get_var_index_in_dec(
-                    group=b.group, name=b.name
-                )
+                idx = op.get_var_index_in_dec(group=b.group, name=b.name)
                 # Convert scalar to array. Only need to check one bound as the
                 # StageVarBoundConfig ensure both are the same type
                 if np.isscalar(lb):
@@ -606,7 +607,7 @@ class ScaledMeshOCP(CompositeProblem):
             else:
                 raise TypeError(f"Expected type BoundConfig but got {type(b)}")
 
-    def _set_scales(self, scales: Dict[str, Dict[str, float]]):
+    def _set_scales(self, scale_configs: Tuple[ScaleConfig]):
         """Construct variable scales
 
         Using scales of variables (of what order of magnitude each variable is), we
@@ -620,20 +621,62 @@ class ScaledMeshOCP(CompositeProblem):
         to minimize the changes required to NLP functions.
         """
 
-        # # Decision variable scale from stage var
-        # var_scales = {
-        #     g: np.tile(1 / self.model.get_group_scales(g), (self.num_stages, 1))
-        #     for g in self.stage_var_groups
-        # }
-        # # TODO: We should set this somewhere else
-        # for var_name in self.global_var_names:
-        #     if var_name in scales:
-        #         var_scales[var_name] = scales[var_name]
-        #     else:
-        #         var_scales[var_name] = 1
-        # self._dec_var_scales = self.dec_var_operator.flatten_var(**var_scales)
-        # HACK: re-enable scaling
+        op = self.dec_var_operator
+
+        # First we create a dictioinary to summarise all scales in one place.
+        var_scales = {
+            g: self.model.make_const_vector(g, 1.0) for g in self.model._implicit_inputs
+        }
+        for var_name in self.global_var_names:
+            var_scales[var_name] = 1.0
+
+        # create default decision variable scales
         self._dec_var_scales = np.ones(self.num_dec)
+
+        # Overwrite with scales from configs and update decision variable scales
+        for sc in scale_configs:
+            if isinstance(sc, GlobalVarScaleConfig):
+                var_scales[sc.name] = sc.value
+                self._dec_var_scales[op.get_global_var_index(sc.name)] = sc.value
+            elif isinstance(sc, StageVarScaleConfig):
+                var_scales[sc.group][
+                    op.get_var_index_in_group(sc.group, sc.name)
+                ] = sc.value
+                self._dec_var_scales[
+                    op.get_var_index_in_dec(sc.group, sc.name)
+                ] = sc.value
+
+        # Set constarint scales
+        continuity_scales = np.ravel(
+            np.tile(
+                var_scales["states"],
+                (self.num_intervals, op.num_stages_per_interval - 1, 1),
+            )
+        )
+        self._constraints["continuity"].set_con_scales(continuity_scales)
+
+        # HACK: hard-coded order here needs to correspond to order in implicit_con. How
+        # do we make it more robust?
+        # NOTE: here we scale the residuals with unity because:
+        # 1) they are not decision, we don't necessarily need to set their scales
+        # 2) the user are free to set the scales of the residual in the model.
+        model_algebra_scales = np.concatenate(
+            [
+                var_scales["states"],
+                var_scales["con_outputs"],
+                np.ones(self.model.num_residuals),
+            ]
+            * self.num_stages
+        )
+        # HACK: we have an issue here that we want Convconstraints to automatically set
+        # the scales, which would require the 'unit_problem' to have scales set first
+        # But:
+        # 1) in this method, we need the constraints to be created already
+        # 2) the unit_problem only exists upon construction of 'model_algebra' ConvCon,
+        # so to modify the scales, we need to create the ConvCon after setting the
+        # scales!
+        # As a result we don't automatically set convcon scales yet.
+        self._constraints["model_algebra"].set_con_scales(model_algebra_scales)
 
     def set_boundary_conditions(
         self, boundary_conditions: Tuple[BoundaryConditionConfig]

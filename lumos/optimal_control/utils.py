@@ -142,7 +142,7 @@ class DecVarOperator:
         # Build an list with order of group defined in _dec_var_groups
         global_vars = np.array([kwargs.pop(name) for name in self._global_var_names])
         stage_vars = [kwargs[g] for g in self._stage_var_groups]
-        vec = np.concatenate(stage_vars, axis=1).flatten()
+        vec = np.concatenate(stage_vars, axis=-1).flatten()
 
         # Append global vars to the end
         # FIXME: here an order of the vector is also assumed.
@@ -368,29 +368,6 @@ class DecVarOperator:
         return x[self.get_var_index_in_dec(group=group, name=name, stage=stage)]
 
 
-def create_block_banded_structure(
-    block_rows: int, block_cols: int, row_offset: int, col_offset: int, num_blocks: int
-) -> Tuple[np.ndarray, np.ndarray]:
-    # NOTE: we donot use create_offset_structure here because the output from this needs
-    # to be 2d matrices that are the same shape as the blocks themselves.
-    block_shape = (block_rows, block_cols)
-    ones = np.ones(block_shape)
-    base_idx_row, base_idx_col = np.nonzero(ones)
-    base_idx_row = base_idx_row.reshape(*block_shape)
-    base_idx_col = base_idx_col.reshape(*block_shape)
-
-    # Construct the indices stage by stage for readibility
-    idx_row, idx_col = [], []
-    for interval in range(num_blocks):
-        new_idx_row = base_idx_row + interval * row_offset
-        new_idx_col = base_idx_col + interval * col_offset
-
-        idx_row.append(new_idx_row)
-        idx_col.append(new_idx_col)
-
-    return np.stack(idx_row), np.stack(idx_col)
-
-
 def create_offset_structure(
     base_rows: List[int],
     base_cols: List[int],
@@ -408,7 +385,7 @@ def create_offset_structure(
         idx_row.append(new_idx_row)
         idx_col.append(new_idx_col)
 
-    return np.vstack(idx_row), np.vstack(idx_col)
+    return np.hstack(idx_row), np.hstack(idx_col)
 
 
 def stack_and_increment(x: np.ndarray, axis: int, num_repeat: int, num_increment: int):

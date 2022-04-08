@@ -4,8 +4,10 @@ from unittest import TestCase
 from lumos.optimal_control.config import (
     BoundaryConditionConfig,
     GlobalVarBoundConfig,
+    GlobalVarScaleConfig,
     SimConfig,
     StageVarBoundConfig,
+    StageVarScaleConfig,
 )
 
 
@@ -91,6 +93,14 @@ class TestSimConfig(TestCase):
             transcription=("LGR", {"num_stages": 3}),
             is_cyclic=True,
             non_cyclic_vars=["a", "b"],
+            bounds=(
+                StageVarBoundConfig("states", "x", (0.0, 2.0)),
+                GlobalVarBoundConfig("mesh_scale", (0.0, 2.0)),
+            ),
+            scales=(
+                StageVarScaleConfig("states", "x", 2.0),
+                GlobalVarScaleConfig("mesh_scale", 10.0),
+            ),
             boundary_conditions=(
                 BoundaryConditionConfig(0, "states", "x", 1.0),
                 BoundaryConditionConfig(0, "states", "y", 1.0),

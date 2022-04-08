@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 
 from lumos.optimal_control.config import (
+    BoundConfig,
     BoundaryConditionConfig,
     StageVarBoundConfig,
     GlobalVarBoundConfig,
@@ -45,12 +46,10 @@ def get_default_bounds():
 
 @dataclass
 class DroneSimulationConfig(SimConfig):
-    boundary_conditions: List[Tuple[int, str, str, float]] = field(
+    boundary_conditions: Tuple[BoundaryConditionConfig] = field(
         default_factory=get_default_boundary_conditions
     )
-    bounds: Dict[str, Dict[str, Tuple[float]]] = field(
-        default_factory=get_default_bounds
-    )
+    bounds: Tuple[BoundConfig] = field(default_factory=get_default_bounds)
 
 
 class DroneSimulation(ScaledMeshOCP):
