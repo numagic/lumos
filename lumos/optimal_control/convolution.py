@@ -38,6 +38,10 @@ class ConvConstraints(MappedConstraints):
         FIXME: Currently for non-fixed grid problems, the derivative w.r.t. mesh is not
         taken into account! This means that it only works for 'time-invariant' ODE/DAE
         at the moment.
+
+        NOTE: we could create set_con_scales method here that just repeats the scales of
+        the unit problem. However since that would require the unit problem to be set
+        already at the construction of the ConvProblem, it is tricky to do.
         """
 
         self._unit_problem = unit_problem
@@ -55,9 +59,6 @@ class ConvConstraints(MappedConstraints):
         self._width = unit_problem.num_in
         self.set_params(params)
 
-        # NOTE: here for the constraints, jacobian and hessian, we deliberately leave out
-        # the unravelling because it would be handled at the next stage in CompositeProblem.
-        # This is to avoid having backend confusion for the 'ravel' op.
         def _constraints(x):
             transformed_vars = self._transform_inputs(x)
             return np.ravel(
@@ -150,10 +151,3 @@ class ConvConstraints(MappedConstraints):
         )
 
         return jac_struct, hess_struct
-
-    # HACK: unused now, as we manually set the ConvCon scaling
-    def _set_con_scales(self):
-        """Create constraint scales by repeating unit problem scales."""
-        self._con_scales = np.hstack([self._unit_problem._con_scales] * self._batch)
-        self._jac_scales = np.hstack([self._unit_problem._jac_scales] * self._batch)
-

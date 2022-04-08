@@ -308,6 +308,9 @@ class StateSpaceModel(Model):
 
         For models that are really implicit, the user should implement the implicit form
         directly.
+
+        the order of the outputs should be: [states_dot, con_outputs, residuals]. This
+        is a hard-coded limitation of the current design.
         """
 
         model_return = self.forward(states, inputs, mesh)
@@ -323,7 +326,6 @@ class StateSpaceModel(Model):
         # that would require manually scaling the jacobian and hessian as well -- Doable
         # but not necessary for now.
 
-        # FIXME: residuals are not scaled yet
         res = lnp.vector_concat(
             [
                 model_return.states_dot - states_dot,

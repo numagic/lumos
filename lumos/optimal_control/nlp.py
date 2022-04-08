@@ -500,7 +500,7 @@ class CompositeProblem(NLPFunction):
         # NOTE: These must be instance properties. If they are class properties, then
         # the CompositeProblem would behave like a singleton, so if you instantiate one
         # ocp after another, it would keep adding ConvProllem to it!
-        self._constraints: Dict[str, List[MappedConstraints]] = {}
+        self._constraints: Dict[str, List[BaseConstraints]] = {}
         self._objectives: Dict[str, List[BaseObjective]] = {}
         self._idx_triu: np.ndarray = (
             None  # index of upper triangular entries in the hessian.
@@ -513,11 +513,11 @@ class CompositeProblem(NLPFunction):
         # https://github.com/mechmotum/cyipopt/blob/d6841beacb46a340b4c88465159dab9724ee156e/cyipopt/cython/ipopt_wrapper.pyx#L306
         return sum(p.num_con for p in self._constraints.values())
 
-    def add_constraints(self, name: str, c: MappedConstraints):
+    def add_constraints(self, name: str, c: BaseConstraints):
         if name in self._constraints:
             raise ValueError(
-                f"{name} already exists in defined constraints. Please change to a new name.",
-                f"Currently used names are {self._constraints.keys()}",
+                f"{name} already exists in defined constraints. Please change to a new"
+                f"name. Currently used names are {self._constraints.keys()}",
             )
 
         if not (c.num_in == self.num_in):

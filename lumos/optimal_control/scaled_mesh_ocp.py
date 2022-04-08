@@ -144,7 +144,7 @@ class ScaledMeshOCP(CompositeProblem):
         self.set_cons()
 
         # Set up scaling
-        self._set_scales(sim_config.scales)
+        self.set_scales(sim_config.scales)
 
     @classmethod
     def get_sim_config(cls, *args, **kwargs) -> SimConfig:
@@ -611,7 +611,7 @@ class ScaledMeshOCP(CompositeProblem):
             else:
                 raise TypeError(f"Expected type BoundConfig but got {type(b)}")
 
-    def _set_scales(self, scale_configs: Tuple[ScaleConfig]):
+    def set_scales(self, scale_configs: Tuple[ScaleConfig]):
         """Construct variable scales
 
         Using scales of variables (of what order of magnitude each variable is), we
@@ -641,24 +641,34 @@ class ScaledMeshOCP(CompositeProblem):
         for sc in scale_configs:
             if isinstance(sc, GlobalVarScaleConfig):
                 var_scales[sc.name] = sc.value
-                self._dec_var_scales[op.get_global_var_index(sc.name)] = sc.value
+                self._dec_var_scales[op.get_global_var_index(sc.name)] = 1 / sc.value
             elif isinstance(sc, StageVarScaleConfig):
                 var_scales[sc.group][
                     op.get_var_index_in_group(sc.group, sc.name)
                 ] = sc.value
-                self._dec_var_scales[
-                    op.get_var_index_in_dec(sc.group, sc.name)
-                ] = sc.value
+                self._dec_var_scales[op.get_var_index_in_dec(sc.group, sc.name)] = (
+                    1 / sc.value
+                )
+            else:
+                raise TypeError(
+                    f"scales tuple must contain only ScaleConfig objects, "
+                    f"but got {type(sc)}"
+                )
 
         # Set constarint scales
-
         continuity_scales = np.ravel(
             np.tile(
                 var_scales["states"],
                 (self.num_intervals, op.num_stages_per_interval - 1, 1),
             )
         )
+
         if self.is_condensed:
+            # For condensed problem, the constraints are ordered as: all condensed
+            # continuity con, con_outputs and residuals arranged stage by stage.
+            # NOTE: here we scale the residuals with unity because:
+            # 1) they are not decision, we don't necessarily need to set their scales
+            # 2) the user are free to set the scales of the residual in the model.
             condensed_model_algebra_scales = np.concatenate(
                 [continuity_scales]
                 + [var_scales["con_outputs"], np.ones(self.model.num_residuals),]
@@ -669,12 +679,8 @@ class ScaledMeshOCP(CompositeProblem):
             )
 
         else:
-            # NOTE: standard and condensed model_algebra constraints have the same scale.s
-            # HACK: hard-coded order here needs to correspond to order in implicit_con. How
-            # do we make it more robust?
-            # NOTE: here we scale the residuals with unity because:
-            # 1) they are not decision, we don't necessarily need to set their scales
-            # 2) the user are free to set the scales of the residual in the model.
+            # HACK: hard-coded order here needs to correspond to order of model_algebra. How
+            # do we make it more robust? (same for condensed)
             model_algebra_scales = np.concatenate(
                 [
                     var_scales["states"],
@@ -683,14 +689,7 @@ class ScaledMeshOCP(CompositeProblem):
                 ]
                 * self.num_stages
             )
-            # HACK: we have an issue here that we want Convconstraints to automatically set
-            # the scales, which would require the 'unit_problem' to have scales set first
-            # But:
-            # 1) in this method, we need the constraints to be created already
-            # 2) the unit_problem only exists upon construction of 'model_algebra' ConvCon,
-            # so to modify the scales, we need to create the ConvCon after setting the
-            # scales!
-            # As a result we don't automatically set convcon scales yet.
+
             self._constraints["model_algebra"].set_con_scales(model_algebra_scales)
             self._constraints["continuity"].set_con_scales(continuity_scales)
 

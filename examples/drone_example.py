@@ -18,11 +18,6 @@ def main():
             backend="jax",
             transcription="LGR",
             is_condensed=False,
-            scales=(
-                StageVarScaleConfig("states", "x", 1.0),
-                StageVarScaleConfig("states", "z", 1.0),
-                # GlobalVarScaleConfig("mesh_scale", 10.0),
-            ),
         )
     )
 
