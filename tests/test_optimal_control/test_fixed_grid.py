@@ -7,7 +7,7 @@ from scipy.sparse import csc_matrix
 from lumos.models.drone_model import DroneModel
 from lumos.optimal_control.fixed_mesh_ocp import FixedMeshOCP
 from lumos.optimal_control.utils import batch_conv1d
-from lumos.optimal_control.config import BoundaryConditionConfig
+from lumos.optimal_control.config import BoundaryConditionConfig, StageVarScaleConfig
 from lumos.simulations.laptime_simulation import LaptimeSimulation
 from lumos.optimal_control.nlp import LinearConstraints
 
@@ -48,9 +48,9 @@ class TestFixedDistanceCondensed(unittest.TestCase):
                 is_condensed=True,
                 backend="casadi",
                 transcription="LGR",
-                scales={
-                    "states": {"x": 10},
-                },  # Sometimes things only work with scales =1, we need to catch it
+                scales=(
+                    StageVarScaleConfig("states", "x", 10.0),
+                ),  # Sometimes things only work with scales =1, we need to catch it
             ),
         )
 
@@ -62,7 +62,9 @@ class TestFixedDistanceCondensed(unittest.TestCase):
 
     def test_condensed_constraints(self):
         """Condensed constraints should agree with manually constructed ones."""
-        cons = self.ocp._condensed_constraints(self.x0)
+        cons = self.ocp._constraints["model_algebra"].constraints(self.x0)
+        # The manually constructed is unscaled, so we need to unscale the scaled con
+        unscaled_cons = cons * self.ocp._constraints["model_algebra"]._con_scales
         op = self.ocp.dec_var_operator
 
         vars = op.unflatten_var(self.x0)
@@ -98,7 +100,7 @@ class TestFixedDistanceCondensed(unittest.TestCase):
         )
 
         np.testing.assert_allclose(
-            cons[:num_continuity_cons],
+            unscaled_cons[:num_continuity_cons],
             continuity_cons,
             err_msg="continuity part of the condensed constraints are incorrect",
             atol=1e-4,
@@ -115,7 +117,7 @@ class TestFixedDistanceCondensed(unittest.TestCase):
             expected_algebraic_cons.append(model_return.residuals)
         expected_algebraic_cons = np.hstack(expected_algebraic_cons).ravel()
         np.testing.assert_allclose(
-            cons[num_continuity_cons:],
+            unscaled_cons[num_continuity_cons:],
             expected_algebraic_cons,
             err_msg="algebraic part of the condensed constraints are incorrect",
             atol=1e-4,
@@ -132,7 +134,10 @@ class TestFixedDistanceCondensed(unittest.TestCase):
         actual = (
             self.ocp._constraints["model_algebra"].get_csc_jacobian(self.x0).toarray()
         )
-        desired = _fd_jacobian(self.ocp._condensed_constraints, self.x0)
+        desired = _fd_jacobian(
+            self.ocp._constraints["model_algebra"].constraints, self.x0
+        )
+
         np.testing.assert_allclose(actual, desired, atol=1e-4, rtol=1e-3)
 
     def test_condensed_hessian(self):
@@ -143,15 +148,17 @@ class TestFixedDistanceCondensed(unittest.TestCase):
         lagrange = np.abs(
             np.random.randn(self.ocp._constraints["model_algebra"].num_con)
         )
-        vals = self.ocp._condensed_hessian(self.x0, lagrange)
-        rows, cols = self.ocp._condensed_hessianstructure()
+        vals = self.ocp._constraints["model_algebra"].hessian(self.x0, lagrange)
+        rows, cols = self.ocp._constraints["model_algebra"].hessianstructure()
         shape = (self.ocp.num_dec, self.ocp.num_dec)
         actual = csc_matrix(
             (vals.ravel(), (rows.ravel(), cols.ravel())), shape=shape
         ).toarray()
 
         def lagrangian(xx):
-            return np.dot(lagrange, self.ocp._condensed_constraints(xx))
+            return np.dot(
+                lagrange, self.ocp._constraints["model_algebra"].constraints(xx)
+            )
 
         desired = _fd_hessian(lagrangian, self.x0, delta=1e-3)
         np.testing.assert_allclose(actual, desired, atol=1e-4, rtol=1e-3)

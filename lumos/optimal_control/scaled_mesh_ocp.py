@@ -213,6 +213,10 @@ class ScaledMeshOCP(CompositeProblem):
         new_x[idx_states_dot] = 0
 
         algebraic_con = self._con_storage["model_algebra"].constraints(new_x)
+
+        # Reshape algebraic_con to (num_stages, num_con_per_stage) to make indexing
+        # easier
+        algebraic_con = np.reshape(algebraic_con, (self.num_stages, -1))
         # HACK: here we rely on the states_dot constraints being the first ones
         states_dot = algebraic_con[:, : self.model.num_states]
 
@@ -647,36 +651,48 @@ class ScaledMeshOCP(CompositeProblem):
                 ] = sc.value
 
         # Set constarint scales
+
         continuity_scales = np.ravel(
             np.tile(
                 var_scales["states"],
                 (self.num_intervals, op.num_stages_per_interval - 1, 1),
             )
         )
-        self._constraints["continuity"].set_con_scales(continuity_scales)
+        if self.is_condensed:
+            condensed_model_algebra_scales = np.concatenate(
+                [continuity_scales]
+                + [var_scales["con_outputs"], np.ones(self.model.num_residuals),]
+                * self.num_stages
+            )
+            self._constraints["model_algebra"].set_con_scales(
+                condensed_model_algebra_scales
+            )
 
-        # HACK: hard-coded order here needs to correspond to order in implicit_con. How
-        # do we make it more robust?
-        # NOTE: here we scale the residuals with unity because:
-        # 1) they are not decision, we don't necessarily need to set their scales
-        # 2) the user are free to set the scales of the residual in the model.
-        model_algebra_scales = np.concatenate(
-            [
-                var_scales["states"],
-                var_scales["con_outputs"],
-                np.ones(self.model.num_residuals),
-            ]
-            * self.num_stages
-        )
-        # HACK: we have an issue here that we want Convconstraints to automatically set
-        # the scales, which would require the 'unit_problem' to have scales set first
-        # But:
-        # 1) in this method, we need the constraints to be created already
-        # 2) the unit_problem only exists upon construction of 'model_algebra' ConvCon,
-        # so to modify the scales, we need to create the ConvCon after setting the
-        # scales!
-        # As a result we don't automatically set convcon scales yet.
-        self._constraints["model_algebra"].set_con_scales(model_algebra_scales)
+        else:
+            # NOTE: standard and condensed model_algebra constraints have the same scale.s
+            # HACK: hard-coded order here needs to correspond to order in implicit_con. How
+            # do we make it more robust?
+            # NOTE: here we scale the residuals with unity because:
+            # 1) they are not decision, we don't necessarily need to set their scales
+            # 2) the user are free to set the scales of the residual in the model.
+            model_algebra_scales = np.concatenate(
+                [
+                    var_scales["states"],
+                    var_scales["con_outputs"],
+                    np.ones(self.model.num_residuals),
+                ]
+                * self.num_stages
+            )
+            # HACK: we have an issue here that we want Convconstraints to automatically set
+            # the scales, which would require the 'unit_problem' to have scales set first
+            # But:
+            # 1) in this method, we need the constraints to be created already
+            # 2) the unit_problem only exists upon construction of 'model_algebra' ConvCon,
+            # so to modify the scales, we need to create the ConvCon after setting the
+            # scales!
+            # As a result we don't automatically set convcon scales yet.
+            self._constraints["model_algebra"].set_con_scales(model_algebra_scales)
+            self._constraints["continuity"].set_con_scales(continuity_scales)
 
     def set_boundary_conditions(
         self, boundary_conditions: Tuple[BoundaryConditionConfig]
