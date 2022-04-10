@@ -614,15 +614,20 @@ class ScaledMeshOCP(CompositeProblem):
     def set_scales(self, scale_configs: Tuple[ScaleConfig]):
         """Construct variable scales
 
-        Using scales of variables (of what order of magnitude each variable is), we
-        construct the scaling factors for constraints and decision variables.
+        The scale of a variable represents qualitatively how 'large' a varialbe is.
+        Using scales of variables, we construct the scaling factors for constraints and
+        decision variables.
 
-        The constraint scaling are applied by modifying the NLP function constraints,
+        Constraints:
+        - g_hat = g/g_scale
+        - The constraint scaling are applied by modifying the NLP function constraints,
         this is done so that the convergence criteria will be determined on scaled
         constraint values.
 
-        The decision variable scaling is done directly via IPOPT settings, this is done
-        to minimize the changes required to NLP functions.
+        Decision variables:
+        - x_hat = x*x_scale
+        - The decision variable scaling is done directly via IPOPT settings, in order to
+        minimize the changes required to NLP functions.
         """
 
         op = self.dec_var_operator

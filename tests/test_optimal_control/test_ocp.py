@@ -1,4 +1,3 @@
-import logging
 import unittest
 from typing import Any, Tuple
 
@@ -8,7 +7,11 @@ from numpy.testing import assert_array_equal
 from parameterized import parameterized_class
 from scipy.sparse import coo_matrix
 
-from lumos.optimal_control.config import StageVarBoundConfig
+from lumos.optimal_control.config import (
+    GlobalVarScaleConfig,
+    StageVarBoundConfig,
+    StageVarScaleConfig,
+)
 from lumos.simulations.drone_simulation import DroneSimulation
 
 _todo = unittest.skip("To be implemented")
@@ -17,13 +20,126 @@ _todo = unittest.skip("To be implemented")
 class TestOCP(unittest.TestCase):
     """Test the methods of OCP without any solve."""
 
-    @classmethod
-    def setUpClass(cls):
-        cls.sim_config = DroneSimulation.get_sim_config(
-            num_intervals=10, transcription="Trapezoidal",
+    def setUp(self):
+        self.scales_dict = {
+            "x": StageVarScaleConfig("states", "x", 10.0),
+            "omega": StageVarScaleConfig("inputs", "omega", 4.0),
+            "sin_theta": StageVarScaleConfig("con_outputs", "sin_theta", 2.0),
+            "mesh_scale": GlobalVarScaleConfig("mesh_scale", 1.5),
+        }
+
+        self.sim_config = DroneSimulation.get_sim_config(
+            num_intervals=10,
+            transcription="Trapezoidal",
+            scales=tuple(self.scales_dict.values()),
         )
 
-        cls.ocp = DroneSimulation(sim_config=cls.sim_config)
+        self.ocp = DroneSimulation(sim_config=self.sim_config)
+
+    def _get_state_scales_from_continuity_con(self, name):
+        op = self.ocp.dec_var_operator
+        idx_state = op.get_var_index_in_group("states", name)
+        num_states = op.get_stage_var_size("states")
+        return self.ocp._constraints["continuity"]._con_scales[idx_state::num_states]
+
+    def _get_var_scales_from_model_algebra_con(self, group, name):
+
+        op = self.ocp.dec_var_operator
+        idx_var = op.get_var_index_in_group(group, name)
+        num_con_per_stage = (
+            self.ocp.model.num_states
+            + self.ocp.model.num_con_outputs
+            + self.ocp.model.num_residuals
+        )
+        # FIXME: the indexing of model_algebra relies on the hard-coded order of states,
+        # con_outputs, residuals
+        if group == "states":
+            offset = 0
+        elif group == "con_outputs":
+            offset = self.ocp.model.num_states
+        return self.ocp._constraints["model_algebra"]._con_scales[
+            offset + idx_var :: num_con_per_stage
+        ]
+
+    def _check_constraints_scales_are_correctly_set(self, scales_dict):
+        """Helper function to test scales are correctly passed to the constraints.
+        
+        We don't test if the constraints actually output the correclty scaleds outputs.
+        That is left to test_constraints.py.
+
+        NOTE: only valid with scales_dict with hard-coded structure as in setUp!
+
+        TODO: this test is only valid for un-condensed problem for now. The condesned
+        problem doesnt' have continuity constriants, and have different constarint order
+        in "model_algebra", which contains the condensed continuity.
+        """
+        # State scales in continuity constraints
+        x_scales = self._get_state_scales_from_continuity_con("x")
+        np.testing.assert_array_almost_equal(x_scales, scales_dict["x"].value)
+
+        # Scales in model algebra constraints
+        x_scales = self._get_var_scales_from_model_algebra_con("states", "x")
+        np.testing.assert_array_almost_equal(x_scales, scales_dict["x"].value)
+
+        sin_theta_scales = self._get_var_scales_from_model_algebra_con(
+            "con_outputs", "sin_theta"
+        )
+        np.testing.assert_array_almost_equal(
+            sin_theta_scales, scales_dict["sin_theta"].value
+        )
+
+    def _check_dec_var_scales_are_correctly_set(self, scales_dict):
+        """Helper function to test scales are correctly passed to _dec_var_scales
+
+        NOTE: only valid with scales_dict with hard-coded structure as in setUp!
+        """
+        op = self.ocp.dec_var_operator
+        x_scales = self.ocp._dec_var_scales[op.get_var_index_in_dec("states", "x")]
+        np.testing.assert_array_almost_equal(x_scales, 1 / scales_dict["x"].value)
+
+        omega_scales = self.ocp._dec_var_scales[
+            op.get_var_index_in_dec("inputs", "omega")
+        ]
+        np.testing.assert_array_almost_equal(
+            omega_scales, 1 / scales_dict["omega"].value
+        )
+
+        sin_theta_scales = self.ocp._dec_var_scales[
+            op.get_var_index_in_dec("con_outputs", "sin_theta")
+        ]
+        np.testing.assert_array_almost_equal(
+            sin_theta_scales, 1 / scales_dict["sin_theta"].value
+        )
+
+        mesh_scale_scales = self.ocp._dec_var_scales[
+            op.get_global_var_index("mesh_scale")
+        ]
+        self.assertAlmostEqual(mesh_scale_scales, 1 / scales_dict["mesh_scale"].value)
+
+    def test_correct_scales_are_set_from_sim_config(self):
+        """Test scales are correclty set from sim_config"""
+
+        # check constraint scales
+        self._check_constraints_scales_are_correctly_set(self.scales_dict)
+        # check dec var scales
+        self._check_dec_var_scales_are_correctly_set(self.scales_dict)
+
+    def test_correct_scales_are_set_after_ocp_construction(self):
+        """Test setting scales after ocp construction"""
+
+        # Test on global variable scale
+        scales_dict = {
+            "x": StageVarScaleConfig("states", "x", 3.0),
+            "omega": StageVarScaleConfig("inputs", "omega", 1.5),
+            "sin_theta": StageVarScaleConfig("con_outputs", "sin_theta", 7.1),
+            "mesh_scale": GlobalVarScaleConfig("mesh_scale", 0.3),
+        }
+        self.ocp.set_scales(tuple(scales_dict.values()))
+
+        # check constraint scales
+        self._check_constraints_scales_are_correctly_set(scales_dict)
+        # check dec var scales
+        self._check_dec_var_scales_are_correctly_set(scales_dict)
 
     def test_update_bounds(self):
         """Test corretly updating bounds or otherwise throwing error"""
