@@ -20,6 +20,9 @@ from lumos.optimal_control.nlp import (
 )
 from lumos.optimal_control.config import (
     BoundaryConditionConfig,
+    StageVarScaleConfig,
+    GlobalVarScaleConfig,
+    ScaleConfig,
     StageVarBoundConfig,
     GlobalVarBoundConfig,
     SimConfig,
@@ -109,9 +112,6 @@ class ScaledMeshOCP(CompositeProblem):
         self._logging_dir: str = None
         self._initialize_logging()
 
-        # Set up scaling, scaling must be set up before the nlp function set up, because
-        # they need to be baked into the residual computations.
-        self._set_scales(sim_config.scales)
         self.model.make_model_algebra_cons(self.backend)
 
         # NOTE: here it is mega dangerous that if we keep appending ConvProlbme to the
@@ -142,6 +142,9 @@ class ScaledMeshOCP(CompositeProblem):
 
         # Set the constraint upper and lower bounds.
         self.set_cons()
+
+        # Set up scaling
+        self.set_scales(sim_config.scales)
 
     @classmethod
     def get_sim_config(cls, *args, **kwargs) -> SimConfig:
@@ -210,10 +213,12 @@ class ScaledMeshOCP(CompositeProblem):
         new_x[idx_states_dot] = 0
 
         algebraic_con = self._con_storage["model_algebra"].constraints(new_x)
+
+        # Reshape algebraic_con to (num_stages, num_con_per_stage) to make indexing
+        # easier
+        algebraic_con = np.reshape(algebraic_con, (self.num_stages, -1))
         # HACK: here we rely on the states_dot constraints being the first ones
-        states_dot = algebraic_con[
-            :, : self.model.num_states
-        ] * self.model.get_group_scales("states")
+        states_dot = algebraic_con[:, : self.model.num_states]
 
         # Compute condensed constraints
         A, B = self.transcription.get_continuity_matrices()
@@ -232,10 +237,9 @@ class ScaledMeshOCP(CompositeProblem):
 
         # A@x - B@x_dot*t == 0
         # (batch, num_stages_per_interval -1, num)
-        condensed_con = (
-            np.einsum("ijk,lj->ilk", states, A)
-            - np.einsum("ijk,lj->ilk", (states_dot.T * interval_length).T, B)
-        ) / self.model.get_group_scales("states")
+        condensed_con = np.einsum("ijk,lj->ilk", states, A) - np.einsum(
+            "ijk,lj->ilk", (states_dot.T * interval_length).T, B
+        )
 
         return np.hstack(
             [
@@ -259,12 +263,7 @@ class ScaledMeshOCP(CompositeProblem):
             num_increment=self.num_con_stage,
         )
         # FIXME: dxdot_dvar has undesired x_dot entry with value -1 in it.
-        states_dot_eq_scale = np.hstack(
-            [self.model.get_group_scales("states")] * self.num_stages
-        )
-        states_dot_eq_scale = sparse.diags(states_dot_eq_scale, format="csc")
         dxdot_dvar = algebraic_jac[idx_xdot_eqs.ravel(), :]
-        dxdot_dvar = states_dot_eq_scale @ dxdot_dvar
         dcont_dxdot = continuity_jac[:, idx_states_dot]
 
         dcont_dvar_from_xdot = dcont_dxdot @ dxdot_dvar
@@ -431,10 +430,6 @@ class ScaledMeshOCP(CompositeProblem):
                 x, lagrange_for_continuity.ravel()
             )
             algebraic_jac = self._con_storage["model_algebra"].get_csc_jacobian(x)
-            states_dot_eq_scale = np.hstack(
-                [self.model.get_group_scales("states")] * self.num_stages
-            )
-            states_dot_eq_scale = sparse.diags(states_dot_eq_scale, format="csc")
             idx_xdot_eqs = stack_and_increment(
                 np.arange(self.model.num_states),
                 axis=0,
@@ -442,7 +437,6 @@ class ScaledMeshOCP(CompositeProblem):
                 num_increment=self.num_con_stage,
             )
             dxdot_dvar = algebraic_jac[idx_xdot_eqs.ravel(), :]
-            dxdot_dvar = states_dot_eq_scale @ dxdot_dvar
 
             # Use chain rule on x_dot to get the continuity hessian w.r.t. all variables
             # and the mesh_scale
@@ -601,9 +595,7 @@ class ScaledMeshOCP(CompositeProblem):
                 self.lb[idx] = lb
                 self.ub[idx] = ub
             elif isinstance(b, StageVarBoundConfig):
-                idx = self.dec_var_operator.get_var_index_in_dec(
-                    group=b.group, name=b.name
-                )
+                idx = op.get_var_index_in_dec(group=b.group, name=b.name)
                 # Convert scalar to array. Only need to check one bound as the
                 # StageVarBoundConfig ensure both are the same type
                 if np.isscalar(lb):
@@ -619,33 +611,92 @@ class ScaledMeshOCP(CompositeProblem):
             else:
                 raise TypeError(f"Expected type BoundConfig but got {type(b)}")
 
-    def _set_scales(self, scales: Dict[str, Dict[str, float]]):
+    def set_scales(self, scale_configs: Tuple[ScaleConfig]):
         """Construct variable scales
 
-        Using scales of variables (of what order of magnitude each variable is), we
-        construct the scaling factors for constraints and decision variables.
+        The scale of a variable represents qualitatively how 'large' a varialbe is.
+        Using scales of variables, we construct the scaling factors for constraints and
+        decision variables.
 
-        The constraint scaling are applied by modifying the NLP function constraints,
+        Constraints:
+        - g_hat = g/g_scale
+        - The constraint scaling are applied by modifying the NLP function constraints,
         this is done so that the convergence criteria will be determined on scaled
         constraint values.
 
-        The decision variable scaling is done directly via IPOPT settings, this is done
-        to minimize the changes required to NLP functions.
+        Decision variables:
+        - x_hat = x*x_scale
+        - The decision variable scaling is done directly via IPOPT settings, in order to
+        minimize the changes required to NLP functions.
         """
 
-        self.model.set_scales(scales)
-        # Decision variable scale from stage var
+        op = self.dec_var_operator
+
+        # First we create a dictioinary to summarise all scales in one place.
         var_scales = {
-            g: np.tile(1 / self.model.get_group_scales(g), (self.num_stages, 1))
-            for g in self.stage_var_groups
+            g: self.model.make_const_vector(g, 1.0) for g in self.model._implicit_inputs
         }
-        # TODO: We should set this somewhere else
         for var_name in self.global_var_names:
-            if var_name in scales:
-                var_scales[var_name] = scales[var_name]
+            var_scales[var_name] = 1.0
+
+        # create default decision variable scales
+        self._dec_var_scales = np.ones(self.num_dec)
+
+        # Overwrite with scales from configs and update decision variable scales
+        for sc in scale_configs:
+            if isinstance(sc, GlobalVarScaleConfig):
+                var_scales[sc.name] = sc.value
+                self._dec_var_scales[op.get_global_var_index(sc.name)] = 1 / sc.value
+            elif isinstance(sc, StageVarScaleConfig):
+                var_scales[sc.group][
+                    op.get_var_index_in_group(sc.group, sc.name)
+                ] = sc.value
+                self._dec_var_scales[op.get_var_index_in_dec(sc.group, sc.name)] = (
+                    1 / sc.value
+                )
             else:
-                var_scales[var_name] = 1
-        self._dec_var_scales = self.dec_var_operator.flatten_var(**var_scales)
+                raise TypeError(
+                    f"scales tuple must contain only ScaleConfig objects, "
+                    f"but got {type(sc)}"
+                )
+
+        # Set constarint scales
+        continuity_scales = np.ravel(
+            np.tile(
+                var_scales["states"],
+                (self.num_intervals, op.num_stages_per_interval - 1, 1),
+            )
+        )
+
+        if self.is_condensed:
+            # For condensed problem, the constraints are ordered as: all condensed
+            # continuity con, con_outputs and residuals arranged stage by stage.
+            # NOTE: here we scale the residuals with unity because:
+            # 1) they are not decision, we don't necessarily need to set their scales
+            # 2) the user are free to set the scales of the residual in the model.
+            condensed_model_algebra_scales = np.concatenate(
+                [continuity_scales]
+                + [var_scales["con_outputs"], np.ones(self.model.num_residuals),]
+                * self.num_stages
+            )
+            self._constraints["model_algebra"].set_con_scales(
+                condensed_model_algebra_scales
+            )
+
+        else:
+            # HACK: hard-coded order here needs to correspond to order of model_algebra. How
+            # do we make it more robust? (same for condensed)
+            model_algebra_scales = np.concatenate(
+                [
+                    var_scales["states"],
+                    var_scales["con_outputs"],
+                    np.ones(self.model.num_residuals),
+                ]
+                * self.num_stages
+            )
+
+            self._constraints["model_algebra"].set_con_scales(model_algebra_scales)
+            self._constraints["continuity"].set_con_scales(continuity_scales)
 
     def set_boundary_conditions(
         self, boundary_conditions: Tuple[BoundaryConditionConfig]
@@ -966,10 +1017,9 @@ class ScaledMeshOCP(CompositeProblem):
         A, B = self.transcription.get_continuity_matrices()
 
         # A@x - B@x_dot*t == 0
-        con = (
-            np.einsum("ijk,lj->ilk", states, A)
-            - np.einsum("ijk,lj->ilk", (states_dot.T * interval_length).T, B)
-        ) / self.model.get_group_scales("states")
+        con = np.einsum("ijk,lj->ilk", states, A) - np.einsum(
+            "ijk,lj->ilk", (states_dot.T * interval_length).T, B
+        )
 
         return np.ravel(con)
 
@@ -1004,9 +1054,8 @@ class ScaledMeshOCP(CompositeProblem):
         B_vals = -B_vals * interval_length.reshape([-1, 1, 1])
 
         # Replicate to all states
-        state_scales = self.model.get_group_scales("states")
-        A_vals = np.stack([A_vals] * self.model.num_states, axis=-1) / state_scales
-        B_vals = np.stack([B_vals] * self.model.num_states, axis=-1) / state_scales
+        A_vals = np.stack([A_vals] * self.model.num_states, axis=-1)
+        B_vals = np.stack([B_vals] * self.model.num_states, axis=-1)
         vals = [A_vals.ravel(), B_vals.ravel()]
 
         if "mesh_scale" in op._global_var_names:
@@ -1017,7 +1066,6 @@ class ScaledMeshOCP(CompositeProblem):
             mesh_scale_der = (
                 -B_matrix
                 @ states_dot_interval_tensor
-                / state_scales
                 * self._normalized_interval_length.reshape([-1, 1, 1])
             )
 
@@ -1117,9 +1165,7 @@ class ScaledMeshOCP(CompositeProblem):
         lagrange = lagrange * self._normalized_interval_length.reshape([-1, 1, 1])
 
         A, B = self.transcription.get_continuity_matrices()
-        vals = np.einsum("ijk,jl->ilk", lagrange, -B) / self.model.get_group_scales(
-            "states"
-        )
+        vals = np.einsum("ijk,jl->ilk", lagrange, -B)
 
         return vals
 

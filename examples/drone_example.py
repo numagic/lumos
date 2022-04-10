@@ -1,5 +1,6 @@
 import logging
 import numpy as np
+from lumos.optimal_control.config import StageVarScaleConfig, GlobalVarScaleConfig
 
 from lumos.simulations.drone_simulation import DroneSimulation
 
@@ -14,7 +15,7 @@ def main():
         sim_config=DroneSimulation.get_sim_config(
             num_intervals=99,
             hessian_approximation=h_approx,
-            backend="casadi",
+            backend="jax",
             transcription="LGR",
             is_condensed=False,
         )

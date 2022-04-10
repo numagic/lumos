@@ -19,8 +19,7 @@ class ModelWithWrongConOutputs(StateSpaceModel):
         outputs = self.make_vector(group="outputs", output0=0.0, output1=1.0)
 
         return self.make_state_space_model_return(
-            states_dot=states_dot,
-            outputs=outputs,
+            states_dot=states_dot, outputs=outputs,
         )
 
 
@@ -35,25 +34,20 @@ class ModelWithCorrectConOutputs(ModelWithWrongConOutputs):
 
 
 @state_space_io(
-    states=("state0", "state1"),
-    inputs=("input0",),
-    outputs=("output0", "output1"),
+    states=("state0", "state1"), inputs=("input0",), outputs=("output0", "output1"),
 )
 class ModelWithNoConOutputs(ModelWithCorrectConOutputs):
     pass
 
 
 @state_space_io(
-    states=("state0", "state1"),
-    inputs=("input0",),
+    states=("state0", "state1"), inputs=("input0",),
 )
 class ModelWithNoOutputs(StateSpaceModel):
     def forward(self, states, inputs, mesh=0.0):
         states_dot = self.make_vector(group="states", state0=0.0, state1=0.1)
 
-        return self.make_state_space_model_return(
-            states_dot=states_dot,
-        )
+        return self.make_state_space_model_return(states_dot=states_dot,)
 
 
 class TestStateSpaceModel(unittest.TestCase):
@@ -161,43 +155,3 @@ class TestStateSpaceModel(unittest.TestCase):
         self.assertEqual(len(model_return.states_dot), model.num_states)
         self.assertEqual(len(model_return.outputs), 0)
         self.assertEqual(len(model_return.con_outputs), 0)
-
-    def test_set_scales(self):
-
-        groups = self.model._implicit_inputs
-        # By default, all scales are one
-        for g in groups:
-            np.testing.assert_allclose(
-                self.model.get_group_scales(g), np.ones(self.model.get_num_vars(g))
-            )
-
-        # Now we set some scales
-        scales = {"states": {"x": 10.0}, "inputs": {"omega": 0.1}}
-        self.model.set_scales(scales)
-
-        for g in groups:
-            for n in self.model.get_group_names(g):
-                if g in scales and n in scales[g]:
-                    # Is it the value we set?
-                    self.assertAlmostEqual(self.model.get_var_scale(g, n), scales[g][n])
-                else:
-                    # Is it the default value 1.0?
-                    self.assertAlmostEqual(self.model.get_var_scale(g, n), 1.0)
-
-    def test_scale_implicit_residuals(self):
-        """WHEN scales are set, THEN residuals are scaled correspondingly"""
-        vars = np.random.randn(self.model.num_implicit_var)
-        params = self.model.get_recursive_params()
-
-        res = self.model._apply_and_flat_implicit(vars, 1.0, params=params)
-
-        # Now scale everything up by 10.0, res should now be 0.1 of the original one
-        scales = {
-            g: {n: 10.0 for n in self.model.get_group_names(g)}
-            for g in self.model._implicit_inputs
-        }
-        self.model.set_scales(scales)
-
-        scaled_res = self.model._apply_and_flat_implicit(vars, 1.0, params=params)
-
-        np.testing.assert_allclose(res / 10.0, scaled_res, atol=1e-6)

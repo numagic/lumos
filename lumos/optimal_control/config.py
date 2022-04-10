@@ -93,6 +93,49 @@ class GlobalVarBoundConfig(BoundConfig):
 
 
 @dataclass
+class ScaleConfig:
+    """Config for setting the scaling of constraints and decisvariables.
+
+    TODO: The design follows BoundConfig closely. Maybe we can unite them? Key diffs:
+    - Scales are only scalars, not tuples, and never vectors (so the scales for all
+    stages are the same.)
+
+    """
+
+    @staticmethod
+    def from_dict(input_dict):
+        # FIXME: this is an ugly workaround, using number of inputs to determine type
+        if len(input_dict) == 2:
+            return GlobalVarScaleConfig(**input_dict)
+        elif len(input_dict) == 3:
+            return StageVarScaleConfig(**input_dict)
+        else:
+            raise ValueError(
+                "input dict should either be from GlobalVarScaleConfig or StageVarScaleConfig"
+            )
+
+
+@dataclass
+class StageVarScaleConfig(BoundConfig):
+    """Config for the scale on a stage variable
+    
+    TODO: check all values are postiive!
+    """
+
+    group: str
+    name: str
+    value: float
+
+
+@dataclass
+class GlobalVarScaleConfig(BoundConfig):
+    """Config for the scale on global variables."""
+
+    name: str
+    value: float
+
+
+@dataclass
 class BoundaryConditionConfig:
     """Boundary condition config to constraint a stage variable to a given value."""
 
@@ -120,7 +163,7 @@ class SimConfig:
     hessian_approximation: str = "exact"
     boundary_conditions: Tuple[BoundaryConditionConfig] = ()
     bounds: Tuple[StageVarBoundConfig] = ()
-    scales: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    scales: Tuple[ScaleConfig] = ()
     logging_config: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -144,6 +187,9 @@ class SimConfig:
         # Additional operations for desrialization for config fields
         if self.bounds and isinstance(self.bounds[0], dict):
             self.bounds = tuple(BoundConfig.from_dict(d) for d in self.bounds)
+
+        if self.scales and isinstance(self.scales[0], dict):
+            self.scales = tuple(ScaleConfig.from_dict(d) for d in self.scales)
 
         if self.boundary_conditions and isinstance(self.boundary_conditions[0], dict):
             self.boundary_conditions = tuple(

@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict
 
 import numpy as np
 
-from lumos.optimal_control.nlp import BaseConstraints, CasConstraints
+from lumos.optimal_control.nlp import MappedConstraints, CasConstraints
 from lumos.optimal_control.utils import (
     DecVarOperator,
     batch_conv1d,
@@ -10,10 +10,10 @@ from lumos.optimal_control.utils import (
 )
 
 
-class ConvConstraints(BaseConstraints):
+class ConvConstraints(MappedConstraints):
     def __init__(
         self,
-        unit_problem: BaseConstraints,
+        unit_problem: MappedConstraints,
         dec_var_op: DecVarOperator,
         normalized_mesh: np.ndarray,
         mesh_scale_fn: Callable,
@@ -38,7 +38,12 @@ class ConvConstraints(BaseConstraints):
         FIXME: Currently for non-fixed grid problems, the derivative w.r.t. mesh is not
         taken into account! This means that it only works for 'time-invariant' ODE/DAE
         at the moment.
+
+        NOTE: we could create set_con_scales method here that just repeats the scales of
+        the unit problem. However since that would require the unit problem to be set
+        already at the construction of the ConvProblem, it is tricky to do.
         """
+
         self._unit_problem = unit_problem
         self._normalized_mesh = normalized_mesh
         self._mesh_scale_fn = mesh_scale_fn
@@ -54,13 +59,51 @@ class ConvConstraints(BaseConstraints):
         self._width = unit_problem.num_in
         self.set_params(params)
 
-    @property
-    def num_con(self):
-        return self._batch * self._unit_problem.num_con
+        def _constraints(x):
+            transformed_vars = self._transform_inputs(x)
+            return np.ravel(
+                unit_problem.mapped_constraints(
+                    transformed_vars, self._get_mesh(x), self._params
+                )
+            )
 
-    @property
-    def num_in(self):
-        return self._op.num_dec
+        def _jacobian(x):
+            transformed_vars = self._transform_inputs(x)
+            return np.ravel(
+                unit_problem.mapped_jacobian(
+                    transformed_vars, self._get_mesh(x), self._params
+                )
+            )
+
+        def _hessian(x, lagrange):
+            transformed_vars = self._transform_inputs(x)
+
+            # Reshape lagrange to get ready for vmap
+            shape = (self._batch, unit_problem.num_con)
+            if np.prod(shape) != len(lagrange):
+                raise ValueError(
+                    f"wrong length of lagrangian. Expect {np.prod(shape)}, "
+                    f"but got {len(lagrange)}"
+                )
+            lagrange = np.reshape(lagrange, shape)
+
+            hess = unit_problem.mapped_hessian(
+                transformed_vars, self._get_mesh(x), self._params, lagrange
+            )
+
+            return np.ravel(hess)
+
+        jac_struct, hess_struct = self._build_jac_and_hess_struct(unit_problem)
+
+        super().__init__(
+            num_in=dec_var_op.num_dec,
+            num_con=self._batch * unit_problem.num_con,
+            constraints=_constraints,
+            jacobian=_jacobian,
+            hessian=_hessian,
+            jacobian_structure=jac_struct,
+            hessian_structure=hess_struct,
+        )
 
     def set_params(self, params):
         # Casadi functions requires flat array as inputs.
@@ -78,78 +121,28 @@ class ConvConstraints(BaseConstraints):
         if not (self._op.num_global_var == 0):
             x = x[: -self._op.num_global_var]
 
-        return batch_conv1d(
-            x,
-            width=self._width,
-            stride=self._stride,
-        )
+        return batch_conv1d(x, width=self._width, stride=self._stride,)
 
     def _get_mesh(self, x):
         return self._normalized_mesh * self._mesh_scale_fn(x)
 
-    # NOTE: here for the constraints, jacobian and hessian, we deliberately leave out
-    # the unravelling because it would be handled at the next stage in CompositeProblem.
-    # This is to avoid having backend confusion for the 'ravel' op.
-    def _constraints_with_params(self, x, params):
-        transformed_vars = self._transform_inputs(x)
-        return self._unit_problem.mapped_constraints(
-            transformed_vars, self._get_mesh(x), params
-        )
+    def _build_jac_and_hess_struct(self, unit_problem):
 
-    # NOTE: the extra level of factoring is so that we can jit the inner level call
-    # and keep params a non-static arguments for jit
-    def constraints(self, x):
-        return self._constraints_with_params(x, self._params)
+        # Jacobian
+        unit_rows, unit_cols = unit_problem.jacobianstructure()
 
-    def _jacobian_with_params(self, x, params):
-        transformed_vars = self._transform_inputs(x)
-        jac = self._unit_problem.mapped_jacobian(
-            transformed_vars, self._get_mesh(x), params
-        )
-        return jac
-
-    def jacobian(self, x):
-        return self._jacobian_with_params(x, self._params)
-
-    def _hessian_with_params(self, x, lagrange, params):
-        transformed_vars = self._transform_inputs(x)
-
-        # Reshape lagrange to get ready for vmap
-        shape = (self._batch, self._unit_problem.num_con)
-        if np.prod(shape) != len(lagrange):
-            raise ValueError(
-                f"wrong length of lagrangian. Expect {np.prod(shape)}, but got {len(lagrange)}"
-            )
-        lagrange = np.reshape(lagrange, shape)
-
-        hh = self._unit_problem.mapped_hessian(
-            transformed_vars, self._get_mesh(x), params, lagrange
-        )
-
-        return hh
-
-    def hessian(self, x, lagrange):
-        return self._hessian_with_params(x, lagrange, self._params)
-
-    def jacobianstructure(self):
-
-        unit_rows, unit_cols = self._unit_problem.jacobianstructure()
-
-        rows, cols = create_offset_structure(
+        jac_struct = create_offset_structure(
             base_rows=np.ravel(unit_rows),
             base_cols=np.ravel(unit_cols),
-            row_offset=self._unit_problem.num_con,
+            row_offset=unit_problem.num_con,
             col_offset=self._stride,
             num_blocks=self._batch,
         )
 
-        return rows, cols
+        # Hessian
+        unit_rows, unit_cols = unit_problem.hessianstructure()
 
-    def hessianstructure(self):
-
-        unit_rows, unit_cols = self._unit_problem.hessianstructure()
-
-        rows, cols = create_offset_structure(
+        hess_struct = create_offset_structure(
             base_rows=np.ravel(unit_rows),
             base_cols=np.ravel(unit_cols),
             row_offset=self._stride,
@@ -157,4 +150,4 @@ class ConvConstraints(BaseConstraints):
             num_blocks=self._batch,
         )
 
-        return rows, cols
+        return jac_struct, hess_struct

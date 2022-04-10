@@ -4,8 +4,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
 
 from lumos.optimal_control.config import (
+    BoundConfig,
     BoundaryConditionConfig,
+    ScaleConfig,
     StageVarBoundConfig,
+    StageVarScaleConfig,
     SimConfig,
 )
 from lumos.models.simple_vehicle_on_track import SimpleVehicleOnTrack
@@ -73,6 +76,22 @@ def get_default_boundary_conditions(
     return bc
 
 
+def get_default_scales() -> Tuple[ScaleConfig]:
+    scales = (
+        StageVarScaleConfig("states", "time", 10.0),
+        StageVarScaleConfig("states", "vx", 10.0),
+        StageVarScaleConfig("states", "wheel_speed_fl", 50.0),
+        StageVarScaleConfig("states", "wheel_speed_fr", 50.0),
+        StageVarScaleConfig("states", "wheel_speed_rl", 50.0),
+        StageVarScaleConfig("states", "wheel_speed_rr", 50.0),
+        StageVarScaleConfig("states_dot", "wheel_speed_fl_dot", 50.0),
+        StageVarScaleConfig("states_dot", "wheel_speed_fr_dot", 50.0),
+        StageVarScaleConfig("states_dot", "wheel_speed_rl_dot", 50.0),
+        StageVarScaleConfig("states_dot", "wheel_speed_rr_dot", 50.0),
+    )
+    return scales
+
+
 @dataclass
 class LTCConfig(SimConfig):
     track: str = None  # Have to give it a default to make it possible to inherit
@@ -80,12 +99,11 @@ class LTCConfig(SimConfig):
     # Overwrite the default factory to those specific to LTC
     # FIXME: default_factory only takes zero argument functions. So here we could end up
     # with a config that has is_cycli==False, but with the default for is_cyclic==True
-    boundary_conditions: List[Tuple[int, str, str, float]] = field(
-        default_factory=get_default_boundary_conditions
-    )
-    bounds: Dict[str, Dict[str, Tuple[float]]] = field(
-        default_factory=get_default_bounds
-    )
+    boundary_conditions: Tuple[
+        BoundaryConditionConfig
+    ] = get_default_boundary_conditions()
+    bounds: Tuple[BoundConfig] = get_default_bounds()
+    scales: Tuple[ScaleConfig] = get_default_scales()
 
     def __post_init__(self):
         super().__post_init__()

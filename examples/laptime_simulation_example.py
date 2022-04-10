@@ -1,9 +1,6 @@
 import logging
 import os
 
-import numpy as np
-
-from lumos.models.composition import ModelMaker
 from lumos.models.simple_vehicle_on_track import SimpleVehicleOnTrack
 from lumos.models.tires.utils import create_params_from_tir_file
 from lumos.simulations.laptime_simulation import LaptimeSimulation
@@ -28,8 +25,6 @@ def main():
         backend="casadi",
         track=track_file,
         transcription="LGR",
-        # boundary_conditions=get_default_boundary_conditions(is_cyclic),
-        # bounds=get_default_bounds(),
         logging_config={
             "results_dir": "results",  # store in a new directory at current directory
             "sim_name": track,
