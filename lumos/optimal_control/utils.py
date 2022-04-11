@@ -283,19 +283,18 @@ class DecVarOperator:
             "GlobalVarEnum", self._global_var_names, start=self.num_all_stage_var,
         )
 
-    def get_var_index_in_group(self, group: str, name: str) -> int:
+    def get_var_index_in_group(
+        self, group: str, name: str, stage: Optional[int] = None
+    ) -> int:
         """Return the position of a varialbe in its group
 
         NOTE: this is a duplicate of Model's method with the same name. Can/should we
         unify them?
         """
-        return getattr(self._model_var_names, group).index(name)
-
-    def get_global_var_index(self, name: str) -> int:
-        return self._global_var_enum[name]
-
-    def get_global_var(self, x, name: str) -> float:
-        return x[self.get_global_var_index(name)]
+        if group == "global":
+            return self._global_var_enum[name] - self.num_all_stage_var
+        else:
+            return getattr(self._model_var_names, group).index(name)
 
     def get_var_index_in_dec(
         self, group: str, name: str, stage: Optional[int] = None
@@ -306,29 +305,38 @@ class DecVarOperator:
         an array of the all the corresponding decision variables.
         """
 
-        if stage is None:
-            # Stage not given, then provide it for all stages.
-
-            return (
-                self._stage_var_enum[self._make_stage_var_name(group=group, name=name)]
-                + np.arange(self.num_stages) * self.num_var_stage
-            )
-
+        if group == "global":
+            if stage is not None:
+                logger.warning("stage is ignored for group == 'global'")
+            return self._global_var_enum[name]
         else:
-            if stage > self.num_stages - 1 or stage < -self.num_stages:
-                raise ValueError(
-                    (
-                        f"stage must be bewteen [{-self.num_stages}, {self.num_stages-1}], "
-                        f"but got {stage}"
-                    )
-                )
-            # allow negative index like python list
-            stage %= self.num_stages
+            if stage is None:
+                # Stage not given, then provide it for all stages.
 
-            return (
-                self._stage_var_enum[self._make_stage_var_name(group=group, name=name)]
-                + stage * self.num_var_stage
-            )
+                return (
+                    self._stage_var_enum[
+                        self._make_stage_var_name(group=group, name=name)
+                    ]
+                    + np.arange(self.num_stages) * self.num_var_stage
+                )
+
+            else:
+                if stage > self.num_stages - 1 or stage < -self.num_stages:
+                    raise ValueError(
+                        (
+                            f"stage must be bewteen [{-self.num_stages}, {self.num_stages-1}], "
+                            f"but got {stage}"
+                        )
+                    )
+                # allow negative index like python list
+                stage %= self.num_stages
+
+                return (
+                    self._stage_var_enum[
+                        self._make_stage_var_name(group=group, name=name)
+                    ]
+                    + stage * self.num_var_stage
+                )
 
     def get_group_indices_at_stage(self, group: str, stage: int) -> np.ndarray:
         """Return the index of a group of variable in the decision var vector."""

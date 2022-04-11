@@ -3,20 +3,18 @@ from unittest import TestCase
 
 from lumos.optimal_control.config import (
     BoundaryConditionConfig,
-    GlobalVarBoundConfig,
-    GlobalVarScaleConfig,
+    BoundConfig,
+    ScaleConfig,
     SimConfig,
-    StageVarBoundConfig,
-    StageVarScaleConfig,
 )
 
 
-class TestStageVarBoundConfig(TestCase):
-    def test_construction(self):
-        """Test both correct and incorrect constructions of StageVarBoundConfig"""
+class TestBoundConfig(TestCase):
+    def test_stage_var_bound_construction(self):
+        """Test both correct and incorrect constructions of BoundConfig for stage vars"""
         # both scalars, should work
         kwargs = {"group": "states", "name": "x", "values": (1.0, 2.0)}
-        bounds = StageVarBoundConfig(**kwargs)
+        bounds = BoundConfig(**kwargs)
         for k, v in kwargs.items():
             self.assertEqual(getattr(bounds, k), v)
 
@@ -26,53 +24,51 @@ class TestStageVarBoundConfig(TestCase):
             "name": "x",
             "values": (np.ones(3), np.ones(3) * 2),
         }
-        bounds = StageVarBoundConfig(**kwargs)
+        bounds = BoundConfig(**kwargs)
         for k, v in kwargs.items():
             self.assertEqual(getattr(bounds, k), v)
 
         # one scalar, one array, should fail
         with self.assertRaises(TypeError):
-            bounds = StageVarBoundConfig("states", "x", (1.0, np.ones(10)))
+            bounds = BoundConfig("states", "x", (1.0, np.ones(10)))
         with self.assertRaises(TypeError):
-            bounds = StageVarBoundConfig("states", "x", (np.ones(10), 1.0))
+            bounds = BoundConfig("states", "x", (np.ones(10), 1.0))
 
         # 2d array, should fail
         with self.assertRaises(AssertionError):
-            bounds = StageVarBoundConfig("states", "x", (np.ones((10, 1)), np.ones(10)))
+            bounds = BoundConfig("states", "x", (np.ones((10, 1)), np.ones(10)))
 
         # arrays of different sizes, should fail
         with self.assertRaises(AssertionError):
-            bounds = StageVarBoundConfig("states", "x", (np.ones(10), np.ones(11)))
+            bounds = BoundConfig("states", "x", (np.ones(10), np.ones(11)))
 
         # scalar incorrect range, should fail
         with self.assertRaises(AssertionError):
-            bounds = StageVarBoundConfig("states", "x", (1.0, 0.0))
+            bounds = BoundConfig("states", "x", (1.0, 0.0))
 
         # scalar incorrect range, should fail
         with self.assertRaises(AssertionError):
-            bounds = StageVarBoundConfig(
+            bounds = BoundConfig(
                 "states", "x", (np.array([1.0, 2.0, 3.0]), np.array([2.0, 1.0, 2.0]))
             )
 
-
-class TestGlobalVarBoundConfig(TestCase):
-    def test_construction(self):
-        """Test both correct and incorrect constructions of TestGlobalVarBoundConfig"""
+    def test_global_var_bound_construction(self):
+        """Test both correct and incorrect constructions of BoundConfig for global vars"""
         # both scalars, should work
-        kwargs = {"name": "mesh_scale", "values": (1.0, 2.0)}
-        bounds = GlobalVarBoundConfig(**kwargs)
+        kwargs = {"group": "global", "name": "mesh_scale", "values": (1.0, 2.0)}
+        bounds = BoundConfig(**kwargs)
         for k, v in kwargs.items():
             self.assertEqual(getattr(bounds, k), v)
 
         # both arrays, should fail
         with self.assertRaises(TypeError):
-            bounds = GlobalVarBoundConfig(
+            bounds = BoundConfig(
                 "mesh_scale", (np.array([1.0, 2.0, 3.0]), np.array([2.0, 1.0, 2.0]))
             )
 
         # scalar incorrect range, should fail
         with self.assertRaises(AssertionError):
-            bounds = GlobalVarBoundConfig("mesh_scale", (1.0, 0.0))
+            bounds = BoundConfig("global", "mesh_scale", (1.0, 0.0))
 
 
 class TestSimConfig(TestCase):
@@ -94,12 +90,12 @@ class TestSimConfig(TestCase):
             is_cyclic=True,
             non_cyclic_vars=["a", "b"],
             bounds=(
-                StageVarBoundConfig("states", "x", (0.0, 2.0)),
-                GlobalVarBoundConfig("mesh_scale", (0.0, 2.0)),
+                BoundConfig("states", "x", (0.0, 2.0)),
+                BoundConfig("global", "mesh_scale", (0.0, 2.0)),
             ),
             scales=(
-                StageVarScaleConfig("states", "x", 2.0),
-                GlobalVarScaleConfig("mesh_scale", 10.0),
+                ScaleConfig("states", "x", 2.0),
+                ScaleConfig("global", "mesh_scale", 10.0),
             ),
             boundary_conditions=(
                 BoundaryConditionConfig(0, "states", "x", 1.0),

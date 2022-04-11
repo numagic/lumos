@@ -30,8 +30,7 @@ import lumos.numpy as lnp
 from lumos.models.base import StateSpaceModel, StateSpaceModelReturn, state_space_io
 from lumos.optimal_control.config import (
     BoundaryConditionConfig,
-    StageVarBoundConfig,
-    GlobalVarBoundConfig,
+    BoundConfig,
 )
 from lumos.optimal_control.scaled_mesh_ocp import ScaledMeshOCP
 
@@ -80,8 +79,8 @@ sim_config = ScaledMeshOCP.get_sim_config(
         BoundaryConditionConfig(-1, "states", "y", -0.6),
     ),
     bounds=(
-        GlobalVarBoundConfig("mesh_scale", (0.01, 10.0)),
-        StageVarBoundConfig("inputs", "theta", (-np.pi / 2, np.pi / 2)),
+        BoundConfig("global", "mesh_scale", (0.01, 10.0)),
+        BoundConfig("inputs", "theta", (-np.pi / 2, np.pi / 2)),
     ),
     num_intervals=49,
     hessian_approximation="exact",

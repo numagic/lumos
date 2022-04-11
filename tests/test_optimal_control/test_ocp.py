@@ -8,9 +8,9 @@ from parameterized import parameterized_class
 from scipy.sparse import coo_matrix
 
 from lumos.optimal_control.config import (
-    GlobalVarScaleConfig,
-    StageVarBoundConfig,
-    StageVarScaleConfig,
+    ScaleConfig,
+    BoundConfig,
+    ScaleConfig,
 )
 from lumos.simulations.drone_simulation import DroneSimulation
 
@@ -22,10 +22,10 @@ class TestOCP(unittest.TestCase):
 
     def setUp(self):
         self.scales_dict = {
-            "x": StageVarScaleConfig("states", "x", 10.0),
-            "omega": StageVarScaleConfig("inputs", "omega", 4.0),
-            "sin_theta": StageVarScaleConfig("con_outputs", "sin_theta", 2.0),
-            "mesh_scale": GlobalVarScaleConfig("mesh_scale", 1.5),
+            "x": ScaleConfig("states", "x", 10.0),
+            "omega": ScaleConfig("inputs", "omega", 4.0),
+            "sin_theta": ScaleConfig("con_outputs", "sin_theta", 2.0),
+            "mesh_scale": ScaleConfig("global", "mesh_scale", 1.5),
         }
 
         self.sim_config = DroneSimulation.get_sim_config(
@@ -112,7 +112,7 @@ class TestOCP(unittest.TestCase):
         )
 
         mesh_scale_scales = self.ocp._dec_var_scales[
-            op.get_global_var_index("mesh_scale")
+            op.get_var_index_in_dec("global", "mesh_scale")
         ]
         self.assertAlmostEqual(mesh_scale_scales, 1 / scales_dict["mesh_scale"].value)
 
@@ -129,10 +129,10 @@ class TestOCP(unittest.TestCase):
 
         # Test on global variable scale
         scales_dict = {
-            "x": StageVarScaleConfig("states", "x", 3.0),
-            "omega": StageVarScaleConfig("inputs", "omega", 1.5),
-            "sin_theta": StageVarScaleConfig("con_outputs", "sin_theta", 7.1),
-            "mesh_scale": GlobalVarScaleConfig("mesh_scale", 0.3),
+            "x": ScaleConfig("states", "x", 3.0),
+            "omega": ScaleConfig("inputs", "omega", 1.5),
+            "sin_theta": ScaleConfig("con_outputs", "sin_theta", 7.1),
+            "mesh_scale": ScaleConfig("global", "mesh_scale", 0.3),
         }
         self.ocp.set_scales(tuple(scales_dict.values()))
 
@@ -148,7 +148,7 @@ class TestOCP(unittest.TestCase):
             old_lb = self.ocp.lb
             old_ub = self.ocp.ub
 
-            new_bounds = (StageVarBoundConfig(group, name, bound_vals),)
+            new_bounds = (BoundConfig(group, name, bound_vals),)
             self.ocp.update_bounds(new_bounds)
 
             op = self.ocp.dec_var_operator

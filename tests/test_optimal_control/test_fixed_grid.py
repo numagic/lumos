@@ -7,7 +7,7 @@ from scipy.sparse import csc_matrix
 from lumos.models.drone_model import DroneModel
 from lumos.optimal_control.fixed_mesh_ocp import FixedMeshOCP
 from lumos.optimal_control.utils import batch_conv1d
-from lumos.optimal_control.config import BoundaryConditionConfig, StageVarScaleConfig
+from lumos.optimal_control.config import BoundaryConditionConfig, ScaleConfig
 from lumos.simulations.laptime_simulation import LaptimeSimulation
 from lumos.optimal_control.nlp import LinearConstraints
 
@@ -49,7 +49,7 @@ class TestFixedDistanceCondensed(unittest.TestCase):
                 backend="casadi",
                 transcription="LGR",
                 scales=(
-                    StageVarScaleConfig("states", "x", 10.0),
+                    ScaleConfig("states", "x", 10.0),
                 ),  # Sometimes things only work with scales =1, we need to catch it
             ),
         )

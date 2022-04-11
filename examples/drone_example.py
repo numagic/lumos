@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-from lumos.optimal_control.config import StageVarScaleConfig, GlobalVarScaleConfig
 
 from lumos.simulations.drone_simulation import DroneSimulation
 

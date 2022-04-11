@@ -5,28 +5,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 @dataclass
 class BoundConfig:
-    """Config for variable bounds.
-    
-    Mainly used for two purposes:
-    - typehint to cover all children classes
-    - factory function to create subclass from staticmethod
-    """
-
-    @staticmethod
-    def from_dict(input_dict):
-        # FIXME: this is an ugly workaround, using number of inputs to determine type
-        if len(input_dict) == 2:
-            return GlobalVarBoundConfig(**input_dict)
-        elif len(input_dict) == 3:
-            return StageVarBoundConfig(**input_dict)
-        else:
-            raise ValueError(
-                "input dict should either be from GlobalVarBoundConfig or StageVarBoundConfig"
-            )
-
-
-@dataclass
-class StageVarBoundConfig(BoundConfig):
     """Config for the bounds on a stage variable
     
     The bound values must be a tuple of floats or a tuple of 1d numpy arrays. The upper
@@ -64,73 +42,13 @@ class StageVarBoundConfig(BoundConfig):
 
 
 @dataclass
-class GlobalVarBoundConfig(BoundConfig):
-    """Config for the bounds on global variables.
-    
-    The bound values must be a tuple of floats, where the upper bound is larger than or
-    equal to the lower bound.
-    """
-
-    name: str
-    values: Tuple[float, float]
-
-    def __post_init__(self):
-        """Perform checks on bounds.
-        
-        1) bounds should be both scalars.
-        2) upper bound should be larger than or equal to lower bound.
-        """
-        lb, ub = self.values
-
-        pretext = f"Failed to set bounds for {self.name}. "
-        if np.isscalar(lb) and np.isscalar(ub):
-            assert ub >= lb, pretext + "lower bounds larger than upper bounds"
-        else:
-            raise TypeError(
-                pretext + "lower and upper bounds must be both scalars or "
-                "both 1d numpy arrays of the same size."
-            )
-
-
-@dataclass
 class ScaleConfig:
-    """Config for setting the scaling of constraints and decisvariables.
-
-    TODO: The design follows BoundConfig closely. Maybe we can unite them? Key diffs:
-    - Scales are only scalars, not tuples, and never vectors (so the scales for all
-    stages are the same.)
-
-    """
-
-    @staticmethod
-    def from_dict(input_dict):
-        # FIXME: this is an ugly workaround, using number of inputs to determine type
-        if len(input_dict) == 2:
-            return GlobalVarScaleConfig(**input_dict)
-        elif len(input_dict) == 3:
-            return StageVarScaleConfig(**input_dict)
-        else:
-            raise ValueError(
-                "input dict should either be from GlobalVarScaleConfig or StageVarScaleConfig"
-            )
-
-
-@dataclass
-class StageVarScaleConfig(BoundConfig):
-    """Config for the scale on a stage variable
+    """Config for the scale on variables
     
     TODO: check all values are postiive!
     """
 
     group: str
-    name: str
-    value: float
-
-
-@dataclass
-class GlobalVarScaleConfig(BoundConfig):
-    """Config for the scale on global variables."""
-
     name: str
     value: float
 
@@ -162,7 +80,7 @@ class SimConfig:
     backend: str = "jax"
     hessian_approximation: str = "exact"
     boundary_conditions: Tuple[BoundaryConditionConfig] = ()
-    bounds: Tuple[StageVarBoundConfig] = ()
+    bounds: Tuple[BoundConfig] = ()
     scales: Tuple[ScaleConfig] = ()
     logging_config: Dict[str, Any] = field(default_factory=dict)
 
@@ -186,10 +104,10 @@ class SimConfig:
 
         # Additional operations for desrialization for config fields
         if self.bounds and isinstance(self.bounds[0], dict):
-            self.bounds = tuple(BoundConfig.from_dict(d) for d in self.bounds)
+            self.bounds = tuple(BoundConfig(**d) for d in self.bounds)
 
         if self.scales and isinstance(self.scales[0], dict):
-            self.scales = tuple(ScaleConfig.from_dict(d) for d in self.scales)
+            self.scales = tuple(ScaleConfig(**d) for d in self.scales)
 
         if self.boundary_conditions and isinstance(self.boundary_conditions[0], dict):
             self.boundary_conditions = tuple(

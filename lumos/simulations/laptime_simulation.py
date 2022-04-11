@@ -7,8 +7,6 @@ from lumos.optimal_control.config import (
     BoundConfig,
     BoundaryConditionConfig,
     ScaleConfig,
-    StageVarBoundConfig,
-    StageVarScaleConfig,
     SimConfig,
 )
 from lumos.models.simple_vehicle_on_track import SimpleVehicleOnTrack
@@ -25,32 +23,29 @@ def get_default_bounds() -> Dict[str, Any]:
     # Variable bounds
 
     bounds = (
-        StageVarBoundConfig("states", "time", (0, np.inf)),
-        StageVarBoundConfig("states", "eta", (-np.pi / 4, np.pi / 4)),
-        StageVarBoundConfig("states", "vx", (5, 100)),
-        StageVarBoundConfig("states", "vy", (-10, 10)),
-        StageVarBoundConfig("states", "yaw_rate", (-np.pi * 2, np.pi * 2)),
-        StageVarBoundConfig("inputs", "throttle", (0, 1)),
-        StageVarBoundConfig("inputs", "brake", (0, 1)),
-        StageVarBoundConfig("inputs", "steer", (-1, 1)),
+        BoundConfig("states", "time", (0, np.inf)),
+        BoundConfig("states", "eta", (-np.pi / 4, np.pi / 4)),
+        BoundConfig("states", "vx", (5, 100)),
+        BoundConfig("states", "vy", (-10, 10)),
+        BoundConfig("states", "yaw_rate", (-np.pi * 2, np.pi * 2)),
+        BoundConfig("inputs", "throttle", (0, 1)),
+        BoundConfig("inputs", "brake", (0, 1)),
+        BoundConfig("inputs", "steer", (-1, 1)),
     )
 
     _corners = ("fl", "fr", "rl", "rr")
     # Limit wheel speed to (1, 300) rad/s
     # For rolling radius = 0.33, this is ~1kph to 356kph
     bounds += tuple(
-        StageVarBoundConfig("states", "wheel_speed_" + c, (0.1, 300)) for c in _corners
+        BoundConfig("states", "wheel_speed_" + c, (0.1, 300)) for c in _corners
     )
 
     # Limit the slip
     bounds += tuple(
-        StageVarBoundConfig("con_outputs", "slip_ratio_" + c, (-0.05, 0.05))
-        for c in _corners
+        BoundConfig("con_outputs", "slip_ratio_" + c, (-0.05, 0.05)) for c in _corners
     )
     bounds += tuple(
-        StageVarBoundConfig(
-            "con_outputs", "slip_angle_" + c, (-np.deg2rad(5), np.deg2rad(5))
-        )
+        BoundConfig("con_outputs", "slip_angle_" + c, (-np.deg2rad(5), np.deg2rad(5)))
         for c in _corners
     )
 
@@ -78,16 +73,16 @@ def get_default_boundary_conditions(
 
 def get_default_scales() -> Tuple[ScaleConfig]:
     scales = (
-        StageVarScaleConfig("states", "time", 10.0),
-        StageVarScaleConfig("states", "vx", 10.0),
-        StageVarScaleConfig("states", "wheel_speed_fl", 50.0),
-        StageVarScaleConfig("states", "wheel_speed_fr", 50.0),
-        StageVarScaleConfig("states", "wheel_speed_rl", 50.0),
-        StageVarScaleConfig("states", "wheel_speed_rr", 50.0),
-        StageVarScaleConfig("states_dot", "wheel_speed_fl_dot", 50.0),
-        StageVarScaleConfig("states_dot", "wheel_speed_fr_dot", 50.0),
-        StageVarScaleConfig("states_dot", "wheel_speed_rl_dot", 50.0),
-        StageVarScaleConfig("states_dot", "wheel_speed_rr_dot", 50.0),
+        ScaleConfig("states", "time", 10.0),
+        ScaleConfig("states", "vx", 10.0),
+        ScaleConfig("states", "wheel_speed_fl", 50.0),
+        ScaleConfig("states", "wheel_speed_fr", 50.0),
+        ScaleConfig("states", "wheel_speed_rl", 50.0),
+        ScaleConfig("states", "wheel_speed_rr", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_fl_dot", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_fr_dot", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_rl_dot", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_rr_dot", 50.0),
     )
     return scales
 
@@ -183,9 +178,9 @@ class LaptimeSimulation(FixedMeshOCP):
         right_distance = self._track.right_distance_at(self.distance_mesh)
 
         track_bounds = (
-            StageVarBoundConfig("inputs", "track_curvature", (curvature, curvature)),
-            StageVarBoundConfig("inputs", "track_heading", (heading, heading)),
-            StageVarBoundConfig("states", "n", (-right_distance, left_distance)),
+            BoundConfig("inputs", "track_curvature", (curvature, curvature)),
+            BoundConfig("inputs", "track_heading", (heading, heading)),
+            BoundConfig("states", "n", (-right_distance, left_distance)),
         )
 
         self.update_bounds(track_bounds)
