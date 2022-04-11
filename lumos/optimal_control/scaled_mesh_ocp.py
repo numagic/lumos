@@ -1228,7 +1228,6 @@ class ScaledMeshOCP(CompositeProblem):
             normalized_mesh=self._flat_normalized_mesh,
             mesh_scale_fn=self._get_mesh_scale,
             params=self._params,
-            stage_or_interval="stage",
         )
 
         # FIXME: currently the unpacking in interval con relies on the order here
