@@ -158,3 +158,11 @@ class TestDecVarOperator(unittest.TestCase):
         idx = self.op.get_var_index_in_group("global", "mesh_scale")
         expected_idx = 0
         self.assertEqual(idx, expected_idx)
+
+    def test_split_stage_and_global_vars(self):
+        x = np.arange(self.op.num_dec)
+        stage_vars, global_vars = self.op.split_stage_and_global_vars(x)
+
+        np.testing.assert_array_almost_equal(stage_vars, x[:-2])
+        np.testing.assert_array_almost_equal(global_vars, x[-2:])
+

@@ -518,7 +518,7 @@ class ScaledMeshOCP(CompositeProblem):
 
     @property
     def num_var_interval(self):
-        return self.dec_var_operator.num_var_interval_without_global
+        return self.dec_var_operator.num_var_interval
 
     @property
     def num_dec(self):
@@ -1090,7 +1090,7 @@ class ScaledMeshOCP(CompositeProblem):
             A_cols,
             axis=0,
             num_repeat=self.num_intervals,
-            num_increment=op.num_var_interval_without_global - op.num_var_stage,
+            num_increment=op.num_var_interval - op.num_var_stage,
         )
 
         # Then stack and increment along the interval axis
@@ -1164,8 +1164,7 @@ class ScaledMeshOCP(CompositeProblem):
         # between the intervals
         rows = np.stack([rows] * self.num_intervals, axis=0)
         rows += (
-            np.arange(op.num_intervals)
-            * (op.num_var_interval_without_global - op.num_var_stage)
+            np.arange(op.num_intervals) * (op.num_var_interval - op.num_var_stage)
         ).reshape((-1, 1, 1))
 
         # col is easy, just the mesh_scale

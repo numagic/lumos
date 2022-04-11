@@ -112,10 +112,9 @@ class ConvConstraints(MappedConstraints):
 
     def _transform_inputs(self, x):
         # FIXME: This should probably come from the dec_var_operator
-        if not (self._op.num_global_var == 0):
-            x = x[: -self._op.num_global_var]
+        stage_vars, _ = self._op.split_stage_and_global_vars(x)
 
-        return batch_conv1d(x, width=self._width, stride=self._stride,)
+        return batch_conv1d(stage_vars, width=self._width, stride=self._stride,)
 
     def _get_mesh(self, x):
         return self._normalized_mesh * self._mesh_scale_fn(x)

@@ -88,12 +88,8 @@ class DecVarOperator:
         return sum(self.get_stage_var_size(g) for g in self._stage_var_groups)
 
     @property
-    def num_var_interval_without_global(self):
+    def num_var_interval(self):
         return self.num_var_stage * self.num_stages_per_interval
-
-    @property
-    def num_var_interval_with_global(self):
-        return self.num_var_interval_without_global + self.num_global_var
 
     @property
     def num_stages(self):
@@ -152,16 +148,15 @@ class DecVarOperator:
         var_groups = np.split(vec, self._build_group_split_indices(), axis=-1)
         return var_groups
 
+    def split_stage_and_global_vars(
+        self, x: lnp.ndarray
+    ) -> Tuple[lnp.ndarray, lnp.ndarray]:
+        return lnp.split(x, (self.num_all_stage_var,))
+
     def unflatten_var(self, vec: lnp.ndarray) -> NamedTuple:
         # Use negative indexing because the stage_var size will be different depending on
         # whether we call this function on global_vars or on interval_vars
-        if self.has_global_var():
-            stage_vars, global_vars = (
-                vec[: -self.num_global_var],
-                vec[-self.num_global_var :],
-            )
-        else:
-            stage_vars = vec
+        stage_vars, global_vars = self.split_stage_and_global_vars(vec)
 
         # Reshape the vector to a matrix where each row is a stage var vector
         if len(stage_vars) > self.num_var_stage:
