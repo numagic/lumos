@@ -2,6 +2,7 @@ from collections import namedtuple
 import unittest
 
 import numpy as np
+from parameterized import parameterized_class
 
 from lumos.optimal_control.utils import (
     DecVarOperator,
@@ -82,6 +83,13 @@ class TestStackAndIncrement(unittest.TestCase):
         self.assertTrue(np.all(delta == num_increment))
 
 
+# We test both with and without global variables
+@parameterized_class(
+    [
+        {"global_var_names": ("mesh_scale", "another_global_var")},
+        {"global_var_names": ()},
+    ]
+)
 class TestDecVarOperator(unittest.TestCase):
     num_intervals: int = 99
     num_stages_per_interval: int = 3
@@ -104,7 +112,7 @@ class TestDecVarOperator(unittest.TestCase):
             num_intervals=self.num_intervals,
             num_stages_per_interval=self.num_stages_per_interval,
             stage_var_groups=("states", "inputs", "con_outputs", "residuals"),
-            global_var_names=("mesh_scale", "another_global_var"),
+            global_var_names=self.global_var_names,
         )
 
     def test_get_var_index_in_dec(self):
@@ -120,16 +128,6 @@ class TestDecVarOperator(unittest.TestCase):
         expected_idx = (self.num_stages - 3) * 8 + 4
         self.assertEqual(idx, expected_idx)
 
-        # Test global index without giving stage
-        idx = self.op.get_var_index_in_dec("global", "mesh_scale")
-        expected_idx = self.op.num_dec - 2
-        self.assertEqual(idx, expected_idx)
-
-        # Test global index with stage (but it should be just ignored)
-        idx = self.op.get_var_index_in_dec("global", "another_global_var", stage=10)
-        expected_idx = self.op.num_dec - 1
-        self.assertEqual(idx, expected_idx)
-
         # Test wrong index
         with self.assertRaises(ValueError):
             idx = self.op.get_var_index_in_dec(
@@ -143,6 +141,17 @@ class TestDecVarOperator(unittest.TestCase):
         expected_idx = 7 + np.arange(self.num_stages) * 8
         np.testing.assert_array_equal(idx, expected_idx)
 
+        if self.op.has_global_var():
+            # Test global index without giving stage
+            idx = self.op.get_var_index_in_dec("global", "mesh_scale")
+            expected_idx = self.op.num_dec - 2
+            self.assertEqual(idx, expected_idx)
+
+            # Test global index with stage (but it should be just ignored)
+            idx = self.op.get_var_index_in_dec("global", "another_global_var", stage=10)
+            expected_idx = self.op.num_dec - 1
+            self.assertEqual(idx, expected_idx)
+
     def test_get_var_index_in_group(self):
         # Test a state
         idx = self.op.get_var_index_in_group("states", "y")
@@ -155,14 +164,18 @@ class TestDecVarOperator(unittest.TestCase):
         self.assertEqual(idx, expected_idx)
 
         # Test a global var
-        idx = self.op.get_var_index_in_group("global", "mesh_scale")
-        expected_idx = 0
-        self.assertEqual(idx, expected_idx)
+        if self.op.has_global_var():
+            idx = self.op.get_var_index_in_group("global", "mesh_scale")
+            expected_idx = 0
+            self.assertEqual(idx, expected_idx)
 
     def test_split_stage_and_global_vars(self):
         x = np.arange(self.op.num_dec)
         stage_vars, global_vars = self.op.split_stage_and_global_vars(x)
 
-        np.testing.assert_array_almost_equal(stage_vars, x[:-2])
-        np.testing.assert_array_almost_equal(global_vars, x[-2:])
-
+        np.testing.assert_array_almost_equal(
+            stage_vars, x[: self.op.num_dec - self.op.num_global_var]
+        )
+        np.testing.assert_array_almost_equal(
+            global_vars, x[self.op.num_dec - self.op.num_global_var :]
+        )
