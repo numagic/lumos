@@ -98,12 +98,13 @@ class TestDecVarOperator(unittest.TestCase):
             ["stability", "temperature"],
             ["res0"],
         )
+
         self.op = DecVarOperator(
             model_var_names=model_var_names,
             num_intervals=self.num_intervals,
             num_stages_per_interval=self.num_stages_per_interval,
             stage_var_groups=("states", "inputs", "con_outputs", "residuals"),
-            global_var_names=("mesh_scale",),
+            global_var_names=("mesh_scale", "another_global_var"),
         )
 
     def test_get_var_index_in_dec(self):
@@ -119,6 +120,16 @@ class TestDecVarOperator(unittest.TestCase):
         expected_idx = (self.num_stages - 3) * 8 + 4
         self.assertEqual(idx, expected_idx)
 
+        # Test global index without giving stage
+        idx = self.op.get_var_index_in_dec("global", "mesh_scale")
+        expected_idx = self.op.num_dec - 2
+        self.assertEqual(idx, expected_idx)
+
+        # Test global index with stage (but it should be just ignored)
+        idx = self.op.get_var_index_in_dec("global", "another_global_var", stage=10)
+        expected_idx = self.op.num_dec - 1
+        self.assertEqual(idx, expected_idx)
+
         # Test wrong index
         with self.assertRaises(ValueError):
             idx = self.op.get_var_index_in_dec(
@@ -131,3 +142,19 @@ class TestDecVarOperator(unittest.TestCase):
         idx = self.op.get_var_index_in_dec("residuals", "res0")
         expected_idx = 7 + np.arange(self.num_stages) * 8
         np.testing.assert_array_equal(idx, expected_idx)
+
+    def test_get_var_index_in_group(self):
+        # Test a state
+        idx = self.op.get_var_index_in_group("states", "y")
+        expected_idx = 1
+        self.assertEqual(idx, expected_idx)
+
+        # Test a con_outputs
+        idx = self.op.get_var_index_in_group("con_outputs", "stability")
+        expected_idx = 0
+        self.assertEqual(idx, expected_idx)
+
+        # Test a global var
+        idx = self.op.get_var_index_in_group("global", "mesh_scale")
+        expected_idx = 0
+        self.assertEqual(idx, expected_idx)

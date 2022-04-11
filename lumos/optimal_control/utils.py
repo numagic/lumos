@@ -3,7 +3,6 @@ from collections import namedtuple
 from enum import IntEnum
 from typing import List, NamedTuple, Optional, Tuple, Union
 
-import jax.numpy as jnp
 import numpy as np
 
 import lumos.numpy as lnp
@@ -191,76 +190,6 @@ class DecVarOperator:
             width=self.num_stages_per_interval,
             stride=self.num_stages_per_interval - 1,
         )
-
-    def build_interval_var_tensor(self, x: lnp.ndarray) -> lnp.ndarray:
-        """Build a 2d matrix of interval variables.
-
-        This combines the stages in one interval into a flat vector, and append the
-        global variables to the end.
-        """
-        if self.has_global_var():
-            stage_vars, global_vars = (
-                x[: -self.num_global_var],
-                x[-self.num_global_var :],
-            )
-        else:
-            stage_vars = x
-        stage_vars = jnp.reshape(stage_vars, (self.num_stages, self.num_var_stage))
-
-        all_interval_vars_no_last_stage = jnp.reshape(
-            stage_vars[:-1, :],
-            (self.num_intervals, self.num_stages_per_interval - 1, self.num_var_stage,),
-        )
-
-        # last stage of each interval that need to be concatenated.
-        last_stage_vars = jnp.expand_dims(
-            stage_vars[
-                self.num_stages_per_interval - 1 :: self.num_stages_per_interval - 1, :,
-            ],
-            axis=1,
-        )
-
-        # Concatenate to create the intervals, with the point shared between two
-        # intervals appearing twice.
-        all_interval_vars = jnp.concatenate(
-            [all_interval_vars_no_last_stage, last_stage_vars], axis=1
-        )
-
-        # reshape [num_intervals, num_stage_per_interval, num_var_stage] ->
-        #         [num_intervals, num_var_per_interval]
-        all_interval_vars = jnp.reshape(
-            all_interval_vars,
-            (self.num_intervals, self.num_var_interval_without_global),
-        )
-
-        # append global vars to interval vars
-        if self.has_global_var():
-            all_interval_vars = jnp.hstack(
-                (all_interval_vars, jnp.tile(global_vars, (self.num_intervals, 1)),)
-            )
-
-        return all_interval_vars
-
-    def build_stage_var_tensor(self, x):
-        """Stage var augmented with global var at every stage"""
-        if self.has_global_var():
-            all_stage_vars, global_vars = (
-                x[: -self.num_global_var],
-                x[-self.num_global_var :],
-            )
-        else:
-            all_stage_vars = x
-        all_stage_vars = jnp.reshape(
-            all_stage_vars, (self.num_stages, self.num_var_stage)
-        )
-
-        # append global vars to stage vars
-        if self.has_global_var():
-            all_stage_vars = jnp.hstack(
-                (all_stage_vars, jnp.tile(global_vars, (self.num_stages, 1)),)
-            )
-
-        return all_stage_vars
 
     def _make_stage_var_name(self, group: str, name: str) -> str:
         return group + "." + name
