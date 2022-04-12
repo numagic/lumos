@@ -517,10 +517,6 @@ class ScaledMeshOCP(CompositeProblem):
         return self.dec_var_operator.num_var_stage
 
     @property
-    def num_var_interval(self):
-        return self.dec_var_operator.num_var_interval
-
-    @property
     def num_dec(self):
         return self.dec_var_operator.num_dec
 
