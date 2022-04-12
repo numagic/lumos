@@ -9,8 +9,7 @@ import lumos.numpy as lnp
 from lumos.models.base import StateSpaceModel, StateSpaceModelReturn, state_space_io
 from lumos.optimal_control.config import (
     BoundaryConditionConfig,
-    StageVarBoundConfig,
-    GlobalVarBoundConfig,
+    BoundConfig,
 )
 from lumos.optimal_control.scaled_mesh_ocp import ScaledMeshOCP
 from lumos.optimal_control.fixed_mesh_ocp import FixedMeshOCP
@@ -285,8 +284,8 @@ def solve_brachistochrone(
                 BoundaryConditionConfig(-1, "states", "y", dy),
             ),
             bounds=(
-                GlobalVarBoundConfig("mesh_scale", (0.01, 10.0)),
-                StageVarBoundConfig("inputs", "theta", (-np.pi / 2, np.pi / 2)),
+                BoundConfig("global", "mesh_scale", (0.01, 10.0)),
+                BoundConfig("inputs", "theta", (-np.pi / 2, np.pi / 2)),
             ),
             num_intervals=49,
             hessian_approximation="exact",
@@ -304,9 +303,9 @@ def solve_brachistochrone(
                 BoundaryConditionConfig(-1, "states", "y", dy),
             ),
             bounds=(
-                StageVarBoundConfig("states", "v", (1e-3, 100)),
-                StageVarBoundConfig("states", "y", (-5, 0)),
-                StageVarBoundConfig("inputs", "theta", (-np.pi / 2.01, np.pi / 2.01)),
+                BoundConfig("states", "v", (1e-3, 100)),
+                BoundConfig("states", "y", (-5, 0)),
+                BoundConfig("inputs", "theta", (-np.pi / 2.01, np.pi / 2.01)),
             ),
             num_intervals=49,
             hessian_approximation="exact",

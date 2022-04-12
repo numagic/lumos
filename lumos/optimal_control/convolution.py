@@ -18,7 +18,6 @@ class ConvConstraints(MappedConstraints):
         normalized_mesh: np.ndarray,
         mesh_scale_fn: Callable,
         params: Dict[str, Any],
-        stage_or_interval: str = "stage",
     ):
         """An NLP problem formulated by convoluting some unit problems over the decision variable.
 
@@ -48,14 +47,9 @@ class ConvConstraints(MappedConstraints):
         self._normalized_mesh = normalized_mesh
         self._mesh_scale_fn = mesh_scale_fn
         self._op = dec_var_op
-        if stage_or_interval == "stage":
-            self._batch = dec_var_op.num_stages
-            self._stride = dec_var_op.num_var_stage
-        elif stage_or_interval == "interval":
-            self._batch = dec_var_op.num_intervals
-            self._stride = (
-                dec_var_op.num_var_interval_with_global - dec_var_op.num_var_stage
-            )
+        self._batch = dec_var_op.num_stages
+        self._stride = dec_var_op.num_var_stage
+
         self._width = unit_problem.num_in
         self.set_params(params)
 
@@ -117,11 +111,9 @@ class ConvConstraints(MappedConstraints):
             self._params = params
 
     def _transform_inputs(self, x):
-        # FIXME: This should probably come from the dec_var_operator
-        if not (self._op.num_global_var == 0):
-            x = x[: -self._op.num_global_var]
+        stage_vars, _ = self._op.split_stage_and_global_vars(x)
 
-        return batch_conv1d(x, width=self._width, stride=self._stride,)
+        return batch_conv1d(stage_vars, width=self._width, stride=self._stride,)
 
     def _get_mesh(self, x):
         return self._normalized_mesh * self._mesh_scale_fn(x)

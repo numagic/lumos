@@ -1,9 +1,8 @@
 import logging
 from collections import namedtuple
 from enum import IntEnum
-from typing import List, NamedTuple, Optional, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Tuple, Union
 
-import jax.numpy as jnp
 import numpy as np
 
 import lumos.numpy as lnp
@@ -40,39 +39,30 @@ def batch_conv1d(x, width, stride, backend: str = "numpy"):
 
 
 class DecVarOperator:
-    """Operatur for manipulating decision variables from/to different forms.
-
-    Requirements:
-    - construct a vector (for IPOPT) from matrices of values (states, inputs, etc)
-        use cases: construct bounds, construct initial guess
-    - construct interval variable matrices from a vector
-        use cases: call interval functions
-    - split interval variable array into matrices (states, inputs) and scalar (interval_length)
-        use cases: inside interval function, call on each stages.
-
-    TODO: should we make the global vars individual scalars as it is now, or should we make it
-    a group of vectors? (just like states, inputs, outputs)
-
-    """
 
     _stage_var_enum: IntEnum  # enum used to index flattend variables in a stage.
     _global_var_enum: IntEnum  # enum used to index global var from the decision var vector
 
     def __init__(
         self,
-        model_var_names: NamedTuple,  # TODO: more concrete classes?
+        model_var_names: NamedTuple,
         num_intervals: int,
         num_stages_per_interval: int,
-        stage_var_groups: Tuple[
-            str, ...
-        ],  # defines which model var groups are used as decision variables
-        global_var_names: Tuple[str, ...],  # define global variables
+        stage_var_groups: Tuple[str, ...],
+        global_var_names: Tuple[str, ...],
     ):
-        """[summary]
-        model_var_names: to tell the operator:
-        1) which groups exist in the model
-        2) what are the names and order of the variables in each group
+        """A helper class to construct and manipulate the decision variables.
 
+        Args:
+            model_var_names (NamedTuple): the NamedTuple describing all the I/O of a
+                model
+            num_intervals (int): number of intervals of the problem.
+            num_stages_per_interval (int): number of stages per interval.
+            stage_var_groups (Tuple[str, ...]): the groups of variables (from the model)
+                that are used in the problem construction.
+            global_var_names (Tuple[str, ...]): global variables of the problem, that do
+                not exist at each stage, but only as single scalars for the whole
+                problem. eg: some global variable to scale the mesh.
         """
         self._model_var_names = model_var_names
         self._stage_var_groups = stage_var_groups
@@ -89,12 +79,8 @@ class DecVarOperator:
         return sum(self.get_stage_var_size(g) for g in self._stage_var_groups)
 
     @property
-    def num_var_interval_without_global(self):
+    def num_var_interval(self):
         return self.num_var_stage * self.num_stages_per_interval
-
-    @property
-    def num_var_interval_with_global(self):
-        return self.num_var_interval_without_global + self.num_global_var
 
     @property
     def num_stages(self):
@@ -112,10 +98,6 @@ class DecVarOperator:
     def num_dec(self):
         return self.num_all_stage_var + self.num_global_var
 
-    @property
-    def global_var_indices(self) -> List[int]:
-        return [self._global_var_enum[n] for n in self._global_var_names]
-
     def has_global_var(self) -> bool:
         return self.num_global_var > 0
 
@@ -130,53 +112,45 @@ class DecVarOperator:
         # See np.split
         return np.cumsum(size_list[:-1])
 
-    def _make_decision_varialbes(self, values: List[lnp.ndarray]) -> NamedTuple:
-        """
-        FIXME: Values must be in the same order as _dec_var_groups
-        """
+    def split_stage_and_global_vars(
+        self, x: lnp.ndarray
+    ) -> Tuple[lnp.ndarray, lnp.ndarray]:
+        return lnp.split(x, (self.num_all_stage_var,))
+
+    def merge_stage_and_global_vars(
+        self, stage_vars: lnp.ndarray, global_vars: lnp.ndarray
+    ) -> lnp.ndarray:
+
+        assert (
+            stage_vars.ndim == 1 and global_vars.ndim == 1
+        ), "inputs must be 1d arrays."
+
+        return np.append(stage_vars, global_vars)
+
+    def _make_decision_varialbes(self, **kwargs: Dict[str, lnp.ndarray]) -> NamedTuple:
         return namedtuple(
             "DecisionVariables", self._stage_var_groups + self._global_var_names
-        )(*values)
+        )(**kwargs)
 
     def flatten_var(self, **kwargs) -> lnp.ndarray:
-        # Build an list with order of group defined in _dec_var_groups
         global_vars = np.array([kwargs.pop(name) for name in self._global_var_names])
         stage_vars = [kwargs[g] for g in self._stage_var_groups]
         vec = np.concatenate(stage_vars, axis=-1).flatten()
 
-        # Append global vars to the end
-        # FIXME: here an order of the vector is also assumed.
-        return np.append(vec, global_vars)
-
-    def split_stage_var(self, vec: lnp.ndarray) -> List[lnp.ndarray]:
-        """Split the vector representing one stage into its groups"""
-        var_groups = np.split(vec, self._build_group_split_indices(), axis=-1)
-        return var_groups
+        return self.merge_stage_and_global_vars(vec, global_vars)
 
     def unflatten_var(self, vec: lnp.ndarray) -> NamedTuple:
-        # Use negative indexing because the stage_var size will be different depending on
-        # whether we call this function on global_vars or on interval_vars
-        if self.has_global_var():
-            stage_vars, global_vars = (
-                vec[: -self.num_global_var],
-                vec[-self.num_global_var :],
-            )
-        else:
-            stage_vars = vec
+        stage_vars, global_vars = self.split_stage_and_global_vars(vec)
 
-        # Reshape the vector to a matrix where each row is a stage var vector
-        if len(stage_vars) > self.num_var_stage:
-            # We call this on 1d array as well as 2d matrices, for 1d array, we don't
-            # need to make it a matrix, just keep it as is.
-            stage_vars = stage_vars.reshape((-1, self.num_var_stage))
+        # Reshape into 2d array, split into groups
+        stage_vars = stage_vars.reshape((-1, self.num_var_stage))
+        stage_vars = np.split(stage_vars, self._build_group_split_indices(), axis=-1)
 
-        var_groups = np.split(stage_vars, self._build_group_split_indices(), axis=-1)
+        # Create inputs for making decision variable namedtuple
+        vars = {k: v for k, v in zip(self._stage_var_groups, stage_vars)}
+        vars.update({k: v for k, v in zip(self._global_var_names, global_vars)})
 
-        if self.has_global_var():
-            var_groups += list(global_vars)
-
-        # FIXME: this make decision variable using a list of var group is dangerous.
-        return self._make_decision_varialbes(var_groups)
+        return self._make_decision_varialbes(**vars)
 
     def get_interval_tensor(self, x: lnp.ndarray, group_name: str):
         """Return the interval tensor for a given group
@@ -191,76 +165,6 @@ class DecVarOperator:
             width=self.num_stages_per_interval,
             stride=self.num_stages_per_interval - 1,
         )
-
-    def build_interval_var_tensor(self, x: lnp.ndarray) -> lnp.ndarray:
-        """Build a 2d matrix of interval variables.
-
-        This combines the stages in one interval into a flat vector, and append the
-        global variables to the end.
-        """
-        if self.has_global_var():
-            stage_vars, global_vars = (
-                x[: -self.num_global_var],
-                x[-self.num_global_var :],
-            )
-        else:
-            stage_vars = x
-        stage_vars = jnp.reshape(stage_vars, (self.num_stages, self.num_var_stage))
-
-        all_interval_vars_no_last_stage = jnp.reshape(
-            stage_vars[:-1, :],
-            (self.num_intervals, self.num_stages_per_interval - 1, self.num_var_stage,),
-        )
-
-        # last stage of each interval that need to be concatenated.
-        last_stage_vars = jnp.expand_dims(
-            stage_vars[
-                self.num_stages_per_interval - 1 :: self.num_stages_per_interval - 1, :,
-            ],
-            axis=1,
-        )
-
-        # Concatenate to create the intervals, with the point shared between two
-        # intervals appearing twice.
-        all_interval_vars = jnp.concatenate(
-            [all_interval_vars_no_last_stage, last_stage_vars], axis=1
-        )
-
-        # reshape [num_intervals, num_stage_per_interval, num_var_stage] ->
-        #         [num_intervals, num_var_per_interval]
-        all_interval_vars = jnp.reshape(
-            all_interval_vars,
-            (self.num_intervals, self.num_var_interval_without_global),
-        )
-
-        # append global vars to interval vars
-        if self.has_global_var():
-            all_interval_vars = jnp.hstack(
-                (all_interval_vars, jnp.tile(global_vars, (self.num_intervals, 1)),)
-            )
-
-        return all_interval_vars
-
-    def build_stage_var_tensor(self, x):
-        """Stage var augmented with global var at every stage"""
-        if self.has_global_var():
-            all_stage_vars, global_vars = (
-                x[: -self.num_global_var],
-                x[-self.num_global_var :],
-            )
-        else:
-            all_stage_vars = x
-        all_stage_vars = jnp.reshape(
-            all_stage_vars, (self.num_stages, self.num_var_stage)
-        )
-
-        # append global vars to stage vars
-        if self.has_global_var():
-            all_stage_vars = jnp.hstack(
-                (all_stage_vars, jnp.tile(global_vars, (self.num_stages, 1)),)
-            )
-
-        return all_stage_vars
 
     def _make_stage_var_name(self, group: str, name: str) -> str:
         return group + "." + name
@@ -289,46 +193,65 @@ class DecVarOperator:
         NOTE: this is a duplicate of Model's method with the same name. Can/should we
         unify them?
         """
-        return getattr(self._model_var_names, group).index(name)
-
-    def get_global_var_index(self, name: str) -> int:
-        return self._global_var_enum[name]
-
-    def get_global_var(self, x, name: str) -> float:
-        return x[self.get_global_var_index(name)]
+        if group == "global":
+            return self._global_var_enum[name] - self.num_all_stage_var
+        else:
+            return getattr(self._model_var_names, group).index(name)
 
     def get_var_index_in_dec(
         self, group: str, name: str, stage: Optional[int] = None
     ) -> Union[int, List[int]]:
-        """Return the index of a variable in the decision var vector.
-        
-        When the stage is given, returns a float, when a the stage is not given, return
-        an array of the all the corresponding decision variables.
+        """Return the index/indices of a variable.
+
+        Args:
+            group (str): the group of the variable. eg: "states", "inputs", "global"
+            name (str): the name of the variable in the group.
+            stage (Optional[int], optional): the stage at which to get the variable.
+                For stage variables, if not given, then return an indices for all
+                stages. For global variables, stage is not required. Works with -ve
+                indexing as well Defaults to None.
+
+        Raises:
+            ValueError: when the stage defined is outside of the range of the problem.
+
+        Returns:
+            Union[int, List[int]]: the index of a variable at a given stage,
+                                or the index of a global variable
+                                or the indices of a variable at all stages.
         """
 
-        if stage is None:
-            # Stage not given, then provide it for all stages.
-
-            return (
-                self._stage_var_enum[self._make_stage_var_name(group=group, name=name)]
-                + np.arange(self.num_stages) * self.num_var_stage
-            )
-
+        if group == "global":
+            if stage is not None:
+                logger.warning("stage is ignored for group == 'global'")
+            return self._global_var_enum[name]
         else:
-            if stage > self.num_stages - 1 or stage < -self.num_stages:
-                raise ValueError(
-                    (
-                        f"stage must be bewteen [{-self.num_stages}, {self.num_stages-1}], "
-                        f"but got {stage}"
-                    )
-                )
-            # allow negative index like python list
-            stage %= self.num_stages
+            if stage is None:
+                # Stage not given, then provide it for all stages.
 
-            return (
-                self._stage_var_enum[self._make_stage_var_name(group=group, name=name)]
-                + stage * self.num_var_stage
-            )
+                return (
+                    self._stage_var_enum[
+                        self._make_stage_var_name(group=group, name=name)
+                    ]
+                    + np.arange(self.num_stages) * self.num_var_stage
+                )
+
+            else:
+                if stage > self.num_stages - 1 or stage < -self.num_stages:
+                    raise ValueError(
+                        (
+                            f"stage must be bewteen [{-self.num_stages}, {self.num_stages-1}], "
+                            f"but got {stage}"
+                        )
+                    )
+                # allow negative index like python list
+                stage %= self.num_stages
+
+                return (
+                    self._stage_var_enum[
+                        self._make_stage_var_name(group=group, name=name)
+                    ]
+                    + stage * self.num_var_stage
+                )
 
     def get_group_indices_at_stage(self, group: str, stage: int) -> np.ndarray:
         """Return the index of a group of variable in the decision var vector."""

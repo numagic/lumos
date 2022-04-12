@@ -20,11 +20,8 @@ from lumos.optimal_control.nlp import (
 )
 from lumos.optimal_control.config import (
     BoundaryConditionConfig,
-    StageVarScaleConfig,
-    GlobalVarScaleConfig,
     ScaleConfig,
-    StageVarBoundConfig,
-    GlobalVarBoundConfig,
+    BoundConfig,
     SimConfig,
 )
 from lumos.optimal_control.convolution import ConvConstraints
@@ -129,7 +126,7 @@ class ScaledMeshOCP(CompositeProblem):
             # The states_dot decision variables are un-used, so we set it to
             # 0, and IPOPT will take them out of the NLP depending the settings.
             sim_config.bounds += tuple(
-                StageVarBoundConfig("states_dot", n, (0, 0))
+                BoundConfig("states_dot", n, (0, 0))
                 for n in self.model.get_group_names("states_dot")
             )
 
@@ -500,7 +497,7 @@ class ScaledMeshOCP(CompositeProblem):
         )
 
     def _get_mesh_scale(self, x):
-        return self.dec_var_operator.get_global_var(x, "mesh_scale")
+        return self.dec_var_operator.get_var(x, "global", "mesh_scale")
 
     def get_mesh_from_scale(self, mesh_scale):
         """Get the unnormalized mesh as a flat array
@@ -521,7 +518,7 @@ class ScaledMeshOCP(CompositeProblem):
 
     @property
     def num_var_interval(self):
-        return self.dec_var_operator.num_var_interval_without_global
+        return self.dec_var_operator.num_var_interval
 
     @property
     def num_dec(self):
@@ -579,7 +576,7 @@ class ScaledMeshOCP(CompositeProblem):
         self.lb = -np.inf * np.ones(self.num_dec)
         self.ub = np.inf * np.ones(self.num_dec)
 
-    def update_bounds(self, bounds: Tuple[StageVarBoundConfig]):
+    def update_bounds(self, bounds: Tuple[BoundConfig]):
         """Update variable bounds using bound configs.
         
         If bounds on the same varialbe are defined more than once, the later ones will
@@ -590,26 +587,16 @@ class ScaledMeshOCP(CompositeProblem):
         op = self.dec_var_operator
         for b in bounds:
             lb, ub = b.values
-            if isinstance(b, GlobalVarBoundConfig):
-                idx = op.get_global_var_index(b.name)
-                self.lb[idx] = lb
-                self.ub[idx] = ub
-            elif isinstance(b, StageVarBoundConfig):
-                idx = op.get_var_index_in_dec(group=b.group, name=b.name)
-                # Convert scalar to array. Only need to check one bound as the
-                # StageVarBoundConfig ensure both are the same type
-                if np.isscalar(lb):
-                    lb = np.ones(self.num_stages) * lb
-                    ub = np.ones(self.num_stages) * ub
-                else:
-                    assert len(lb) == self.num_stages, (
-                        f"OCP has {self.num_stages} stages, but got bounds for "
-                        f"{b.group}.{b.name} with size {len(lb)}"
-                    )
-                self.lb[idx] = lb
-                self.ub[idx] = ub
-            else:
-                raise TypeError(f"Expected type BoundConfig but got {type(b)}")
+            idx = op.get_var_index_in_dec(group=b.group, name=b.name)
+            # Convert scalar to array. Only need to check one bound as the
+            # BoundConfig ensure both are the same type
+            if not (np.isscalar(idx)) and not (np.isscalar(lb)):
+                assert len(lb) == self.num_stages, (
+                    f"OCP has {self.num_stages} stages, but got bounds for "
+                    f"{b.group}.{b.name} with size {len(lb)}"
+                )
+            self.lb[idx] = lb
+            self.ub[idx] = ub
 
     def set_scales(self, scale_configs: Tuple[ScaleConfig]):
         """Construct variable scales
@@ -632,33 +619,24 @@ class ScaledMeshOCP(CompositeProblem):
 
         op = self.dec_var_operator
 
-        # First we create a dictioinary to summarise all scales in one place.
+        # First we create a dictioinary to summarise all scales in one place, with
+        # default values of 1 (unscaled)
         var_scales = {
             g: self.model.make_const_vector(g, 1.0) for g in self.model._implicit_inputs
         }
-        for var_name in self.global_var_names:
-            var_scales[var_name] = 1.0
+        var_scales["global"] = np.ones(op.num_global_var)
 
         # create default decision variable scales
         self._dec_var_scales = np.ones(self.num_dec)
 
         # Overwrite with scales from configs and update decision variable scales
         for sc in scale_configs:
-            if isinstance(sc, GlobalVarScaleConfig):
-                var_scales[sc.name] = sc.value
-                self._dec_var_scales[op.get_global_var_index(sc.name)] = 1 / sc.value
-            elif isinstance(sc, StageVarScaleConfig):
-                var_scales[sc.group][
-                    op.get_var_index_in_group(sc.group, sc.name)
-                ] = sc.value
-                self._dec_var_scales[op.get_var_index_in_dec(sc.group, sc.name)] = (
-                    1 / sc.value
-                )
-            else:
-                raise TypeError(
-                    f"scales tuple must contain only ScaleConfig objects, "
-                    f"but got {type(sc)}"
-                )
+            var_scales[sc.group][
+                op.get_var_index_in_group(sc.group, sc.name)
+            ] = sc.value
+            self._dec_var_scales[op.get_var_index_in_dec(sc.group, sc.name)] = (
+                1 / sc.value
+            )
 
         # Set constarint scales
         continuity_scales = np.ravel(
@@ -1004,7 +982,7 @@ class ScaledMeshOCP(CompositeProblem):
 
     def _time_gradient(self, x):
         grad = np.zeros_like(x)
-        grad[self.dec_var_operator.get_global_var_index("mesh_scale")] = 1
+        grad[self.dec_var_operator.get_var_index_in_dec("global", "mesh_scale")] = 1
         return grad
 
     def _continuity_constraints(self, x):
@@ -1111,7 +1089,7 @@ class ScaledMeshOCP(CompositeProblem):
             A_cols,
             axis=0,
             num_repeat=self.num_intervals,
-            num_increment=op.num_var_interval_without_global - op.num_var_stage,
+            num_increment=op.num_var_interval - op.num_var_stage,
         )
 
         # Then stack and increment along the interval axis
@@ -1135,9 +1113,9 @@ class ScaledMeshOCP(CompositeProblem):
 
         if "mesh_scale" in op._global_var_names:
             mesh_scale_rows = A_rows[:, :, 0, :]
-            mesh_scale_cols = op.get_global_var_index("mesh_scale") * np.ones_like(
-                mesh_scale_rows
-            )
+            mesh_scale_cols = op.get_var_index_in_dec(
+                "global", "mesh_scale"
+            ) * np.ones_like(mesh_scale_rows)
             rows.append(mesh_scale_rows.ravel())
             cols.append(mesh_scale_cols.ravel())
         return np.concatenate(rows), np.concatenate(cols)
@@ -1185,12 +1163,11 @@ class ScaledMeshOCP(CompositeProblem):
         # between the intervals
         rows = np.stack([rows] * self.num_intervals, axis=0)
         rows += (
-            np.arange(op.num_intervals)
-            * (op.num_var_interval_without_global - op.num_var_stage)
+            np.arange(op.num_intervals) * (op.num_var_interval - op.num_var_stage)
         ).reshape((-1, 1, 1))
 
         # col is easy, just the mesh_scale
-        cols = np.ones_like(rows) * op.get_global_var_index("mesh_scale")
+        cols = np.ones_like(rows) * op.get_var_index_in_dec("global", "mesh_scale")
         return rows, cols
 
     def _build_continuity_cons(self):
@@ -1249,7 +1226,6 @@ class ScaledMeshOCP(CompositeProblem):
             normalized_mesh=self._flat_normalized_mesh,
             mesh_scale_fn=self._get_mesh_scale,
             params=self._params,
-            stage_or_interval="stage",
         )
 
         # FIXME: currently the unpacking in interval con relies on the order here

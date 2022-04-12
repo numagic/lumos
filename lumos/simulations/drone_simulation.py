@@ -6,8 +6,7 @@ import numpy as np
 from lumos.optimal_control.config import (
     BoundConfig,
     BoundaryConditionConfig,
-    StageVarBoundConfig,
-    GlobalVarBoundConfig,
+    BoundConfig,
     SimConfig,
 )
 from lumos.models.drone_model import DroneModel
@@ -31,16 +30,14 @@ def get_default_boundary_conditions():
 
 def get_default_bounds():
     return (
-        StageVarBoundConfig(group="states", name="x", values=(-50, 50)),
-        StageVarBoundConfig(group="states", name="x_dot", values=(-50, 50)),
-        StageVarBoundConfig(group="states", name="z", values=(-50, 50)),
-        StageVarBoundConfig(group="states", name="z_dot", values=(-50, 50)),
-        StageVarBoundConfig(
-            group="states", name="theta", values=(-10 * np.pi, 10 * np.pi)
-        ),
-        StageVarBoundConfig(group="inputs", name="f", values=(1, 20)),
-        StageVarBoundConfig(group="inputs", name="omega", values=(-10, 10)),
-        GlobalVarBoundConfig(name="mesh_scale", values=(0.1, 50)),
+        BoundConfig(group="states", name="x", values=(-50, 50)),
+        BoundConfig(group="states", name="x_dot", values=(-50, 50)),
+        BoundConfig(group="states", name="z", values=(-50, 50)),
+        BoundConfig(group="states", name="z_dot", values=(-50, 50)),
+        BoundConfig(group="states", name="theta", values=(-10 * np.pi, 10 * np.pi)),
+        BoundConfig(group="inputs", name="f", values=(1, 20)),
+        BoundConfig(group="inputs", name="omega", values=(-10, 10)),
+        BoundConfig(group="global", name="mesh_scale", values=(0.1, 50)),
     )
 
 
