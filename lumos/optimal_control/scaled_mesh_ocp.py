@@ -257,7 +257,7 @@ class ScaledMeshOCP(CompositeProblem):
             np.arange(self.model.num_states),
             axis=0,
             num_repeat=self.num_stages,
-            num_increment=self.num_con_stage,
+            num_increment=self.model.num_implicit_res,
         )
         # FIXME: dxdot_dvar has undesired x_dot entry with value -1 in it.
         dxdot_dvar = algebraic_jac[idx_xdot_eqs.ravel(), :]
@@ -431,7 +431,7 @@ class ScaledMeshOCP(CompositeProblem):
                 np.arange(self.model.num_states),
                 axis=0,
                 num_repeat=self.num_stages,
-                num_increment=self.num_con_stage,
+                num_increment=self.model.num_implicit_res,
             )
             dxdot_dvar = algebraic_jac[idx_xdot_eqs.ravel(), :]
 
@@ -525,20 +525,12 @@ class ScaledMeshOCP(CompositeProblem):
         return self.dec_var_operator.num_dec
 
     @property
-    def num_con_stage(self):
-        return self.model.num_implicit_res
-
-    @property
     def num_continuity_cons(self):
         return (
             self.model.num_states
             * self.transcription.num_constraints_per_interval
             * self.num_intervals
         )
-
-    @property
-    def num_total_con_stage(self):
-        return self.num_con_stage * self.num_stages
 
     def _stage_hessianstructure(self):
         """states_dot and con_outputs are only linear, so no hessian
@@ -894,7 +886,9 @@ class ScaledMeshOCP(CompositeProblem):
 
         if not self.is_condensed:
             # Stage constraints are concatenated as [states_dot, outputs]
-            stage_cons = np.reshape(stage_cons, (self.num_stages, self.num_con_stage))
+            stage_cons = np.reshape(
+                stage_cons, (self.num_stages, self.model.num_implicit_res)
+            )
             stage_cons_df = pd.DataFrame(
                 data=stage_cons,
                 columns=[
@@ -1198,7 +1192,7 @@ class ScaledMeshOCP(CompositeProblem):
         num_con = self.num_intervals * (
             op.num_stages_per_interval - 1
         ) * self.model.num_states + self.num_stages * (
-            self.num_con_stage - self.model.num_states
+            self.model.num_implicit_res - self.model.num_states
         )
 
         condensed_cons = BaseConstraints(
