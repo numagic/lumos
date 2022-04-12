@@ -1,7 +1,7 @@
 import logging
 from collections import namedtuple
 from enum import IntEnum
-from typing import List, NamedTuple, Optional, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Tuple, Union
 
 import numpy as np
 
@@ -107,10 +107,6 @@ class DecVarOperator:
     def num_dec(self):
         return self.num_all_stage_var + self.num_global_var
 
-    @property
-    def global_var_indices(self) -> List[int]:
-        return [self._global_var_enum[n] for n in self._global_var_names]
-
     def has_global_var(self) -> bool:
         return self.num_global_var > 0
 
@@ -125,52 +121,45 @@ class DecVarOperator:
         # See np.split
         return np.cumsum(size_list[:-1])
 
-    def _make_decision_varialbes(self, values: List[lnp.ndarray]) -> NamedTuple:
-        """
-        FIXME: Values must be in the same order as _dec_var_groups
-        """
-        return namedtuple(
-            "DecisionVariables", self._stage_var_groups + self._global_var_names
-        )(*values)
-
-    def flatten_var(self, **kwargs) -> lnp.ndarray:
-        # Build an list with order of group defined in _dec_var_groups
-        global_vars = np.array([kwargs.pop(name) for name in self._global_var_names])
-        stage_vars = [kwargs[g] for g in self._stage_var_groups]
-        vec = np.concatenate(stage_vars, axis=-1).flatten()
-
-        # Append global vars to the end
-        # FIXME: here an order of the vector is also assumed.
-        return np.append(vec, global_vars)
-
-    def split_stage_var(self, vec: lnp.ndarray) -> List[lnp.ndarray]:
-        """Split the vector representing one stage into its groups"""
-        var_groups = np.split(vec, self._build_group_split_indices(), axis=-1)
-        return var_groups
-
     def split_stage_and_global_vars(
         self, x: lnp.ndarray
     ) -> Tuple[lnp.ndarray, lnp.ndarray]:
         return lnp.split(x, (self.num_all_stage_var,))
 
+    def merge_stage_and_global_vars(
+        self, stage_vars: lnp.ndarray, global_vars: lnp.ndarray
+    ) -> lnp.ndarray:
+
+        assert (
+            stage_vars.ndim == 1 and global_vars.ndim == 1
+        ), "inputs must be 1d arrays."
+
+        return np.append(stage_vars, global_vars)
+
+    def _make_decision_varialbes(self, **kwargs: Dict[str, lnp.ndarray]) -> NamedTuple:
+        return namedtuple(
+            "DecisionVariables", self._stage_var_groups + self._global_var_names
+        )(**kwargs)
+
+    def flatten_var(self, **kwargs) -> lnp.ndarray:
+        global_vars = np.array([kwargs.pop(name) for name in self._global_var_names])
+        stage_vars = [kwargs[g] for g in self._stage_var_groups]
+        vec = np.concatenate(stage_vars, axis=-1).flatten()
+
+        return self.merge_stage_and_global_vars(vec, global_vars)
+
     def unflatten_var(self, vec: lnp.ndarray) -> NamedTuple:
-        # Use negative indexing because the stage_var size will be different depending on
-        # whether we call this function on global_vars or on interval_vars
         stage_vars, global_vars = self.split_stage_and_global_vars(vec)
 
-        # Reshape the vector to a matrix where each row is a stage var vector
-        if len(stage_vars) > self.num_var_stage:
-            # We call this on 1d array as well as 2d matrices, for 1d array, we don't
-            # need to make it a matrix, just keep it as is.
-            stage_vars = stage_vars.reshape((-1, self.num_var_stage))
+        # Reshape into 2d array, split into groups
+        stage_vars = stage_vars.reshape((-1, self.num_var_stage))
+        stage_vars = np.split(stage_vars, self._build_group_split_indices(), axis=-1)
 
-        var_groups = np.split(stage_vars, self._build_group_split_indices(), axis=-1)
+        # Create inputs for making decision variable namedtuple
+        vars = {k: v for k, v in zip(self._stage_var_groups, stage_vars)}
+        vars.update({k: v for k, v in zip(self._global_var_names, global_vars)})
 
-        if self.has_global_var():
-            var_groups += list(global_vars)
-
-        # FIXME: this make decision variable using a list of var group is dangerous.
-        return self._make_decision_varialbes(var_groups)
+        return self._make_decision_varialbes(**vars)
 
     def get_interval_tensor(self, x: lnp.ndarray, group_name: str):
         """Return the interval tensor for a given group
@@ -224,7 +213,7 @@ class DecVarOperator:
         self, group: str, name: str, stage: Optional[int] = None
     ) -> Union[int, List[int]]:
         """Return the index of a variable in the decision var vector.
-        
+
         When the stage is given, returns a float, when a the stage is not given, return
         an array of the all the corresponding decision variables.
         """

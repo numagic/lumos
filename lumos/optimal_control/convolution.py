@@ -111,7 +111,6 @@ class ConvConstraints(MappedConstraints):
             self._params = params
 
     def _transform_inputs(self, x):
-        # FIXME: This should probably come from the dec_var_operator
         stage_vars, _ = self._op.split_stage_and_global_vars(x)
 
         return batch_conv1d(stage_vars, width=self._width, stride=self._stride,)
