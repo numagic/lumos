@@ -529,12 +529,12 @@ class ScaledMeshOCP(CompositeProblem):
         return self.model.num_implicit_res
 
     @property
-    def num_con_interval(self):
-        return self.model.num_states * self.transcription.num_constraints_per_interval
-
-    @property
-    def num_total_con_interval(self):
-        return self.num_con_interval * self.num_intervals
+    def num_continuity_cons(self):
+        return (
+            self.model.num_states
+            * self.transcription.num_constraints_per_interval
+            * self.num_intervals
+        )
 
     @property
     def num_total_con_stage(self):
@@ -1174,7 +1174,7 @@ class ScaledMeshOCP(CompositeProblem):
         continuity_cons = BaseConstraints(
             constraints=self._continuity_constraints,
             num_in=self.num_dec,
-            num_con=self.num_total_con_interval,
+            num_con=self.num_continuity_cons,
             jacobian=self._continuity_jacobian,
             jacobian_structure=self._continuity_jacobianstructure(),
             hessian=self._continuity_hessian,
