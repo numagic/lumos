@@ -513,10 +513,6 @@ class ScaledMeshOCP(CompositeProblem):
         return self.dec_var_operator.num_stages
 
     @property
-    def num_var_stage(self):
-        return self.dec_var_operator.num_var_stage
-
-    @property
     def num_dec(self):
         return self.dec_var_operator.num_dec
 
@@ -535,16 +531,14 @@ class ScaledMeshOCP(CompositeProblem):
         algebraic variables they could become nonlinear! But in those case, the
         condensed approach also won't work. (because it has no explicit ODE to work on)
         """
-
-        rows, cols = np.nonzero(np.ones((self.num_var_stage, self.num_var_stage)))
+        op = self.dec_var_operator
+        rows, cols = np.nonzero(np.ones((op.num_var_stage, op.num_var_stage)))
 
         # remove those related to states_dot and con_outputs
         idx_remove = np.hstack(
             [
-                self.dec_var_operator.get_group_indices_at_stage("states_dot", stage=0),
-                self.dec_var_operator.get_group_indices_at_stage(
-                    "con_outputs", stage=0
-                ),
+                op.get_group_indices_at_stage("states_dot", stage=0),
+                op.get_group_indices_at_stage("con_outputs", stage=0),
             ]
         )
 
@@ -895,7 +889,9 @@ class ScaledMeshOCP(CompositeProblem):
             )
 
         dec_var_df = pd.DataFrame(
-            data=np.reshape(dec_var, (self.num_stages, self.num_var_stage)),
+            data=np.reshape(
+                dec_var, (self.num_stages, self.dec_var_operator.num_var_stage)
+            ),
             columns=self.dec_var_operator.stage_var_names,
         )
 
