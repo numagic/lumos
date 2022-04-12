@@ -39,39 +39,30 @@ def batch_conv1d(x, width, stride, backend: str = "numpy"):
 
 
 class DecVarOperator:
-    """Operatur for manipulating decision variables from/to different forms.
-
-    Requirements:
-    - construct a vector (for IPOPT) from matrices of values (states, inputs, etc)
-        use cases: construct bounds, construct initial guess
-    - construct interval variable matrices from a vector
-        use cases: call interval functions
-    - split interval variable array into matrices (states, inputs) and scalar (interval_length)
-        use cases: inside interval function, call on each stages.
-
-    TODO: should we make the global vars individual scalars as it is now, or should we make it
-    a group of vectors? (just like states, inputs, outputs)
-
-    """
 
     _stage_var_enum: IntEnum  # enum used to index flattend variables in a stage.
     _global_var_enum: IntEnum  # enum used to index global var from the decision var vector
 
     def __init__(
         self,
-        model_var_names: NamedTuple,  # TODO: more concrete classes?
+        model_var_names: NamedTuple,
         num_intervals: int,
         num_stages_per_interval: int,
-        stage_var_groups: Tuple[
-            str, ...
-        ],  # defines which model var groups are used as decision variables
-        global_var_names: Tuple[str, ...],  # define global variables
+        stage_var_groups: Tuple[str, ...],
+        global_var_names: Tuple[str, ...],
     ):
-        """[summary]
-        model_var_names: to tell the operator:
-        1) which groups exist in the model
-        2) what are the names and order of the variables in each group
+        """A helper class to construct and manipulate the decision variables.
 
+        Args:
+            model_var_names (NamedTuple): the NamedTuple describing all the I/O of a
+                model
+            num_intervals (int): number of intervals of the problem.
+            num_stages_per_interval (int): number of stages per interval.
+            stage_var_groups (Tuple[str, ...]): the groups of variables (from the model)
+                that are used in the problem construction.
+            global_var_names (Tuple[str, ...]): global variables of the problem, that do
+                not exist at each stage, but only as single scalars for the whole
+                problem. eg: some global variable to scale the mesh.
         """
         self._model_var_names = model_var_names
         self._stage_var_groups = stage_var_groups
@@ -196,9 +187,7 @@ class DecVarOperator:
             "GlobalVarEnum", self._global_var_names, start=self.num_all_stage_var,
         )
 
-    def get_var_index_in_group(
-        self, group: str, name: str, stage: Optional[int] = None
-    ) -> int:
+    def get_var_index_in_group(self, group: str, name: str) -> int:
         """Return the position of a varialbe in its group
 
         NOTE: this is a duplicate of Model's method with the same name. Can/should we
@@ -212,10 +201,23 @@ class DecVarOperator:
     def get_var_index_in_dec(
         self, group: str, name: str, stage: Optional[int] = None
     ) -> Union[int, List[int]]:
-        """Return the index of a variable in the decision var vector.
+        """Return the index/indices of a variable.
 
-        When the stage is given, returns a float, when a the stage is not given, return
-        an array of the all the corresponding decision variables.
+        Args:
+            group (str): the group of the variable. eg: "states", "inputs", "global"
+            name (str): the name of the variable in the group.
+            stage (Optional[int], optional): the stage at which to get the variable.
+                For stage variables, if not given, then return an indices for all
+                stages. For global variables, stage is not required. Works with -ve
+                indexing as well Defaults to None.
+
+        Raises:
+            ValueError: when the stage defined is outside of the range of the problem.
+
+        Returns:
+            Union[int, List[int]]: the index of a variable at a given stage,
+                                or the index of a global variable
+                                or the indices of a variable at all stages.
         """
 
         if group == "global":

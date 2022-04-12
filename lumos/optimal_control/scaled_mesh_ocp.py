@@ -619,12 +619,11 @@ class ScaledMeshOCP(CompositeProblem):
 
         op = self.dec_var_operator
 
-        # First we create a dictioinary to summarise all scales in one place.
+        # First we create a dictioinary to summarise all scales in one place, with
+        # default values of 1 (unscaled)
         var_scales = {
             g: self.model.make_const_vector(g, 1.0) for g in self.model._implicit_inputs
         }
-        # HACK: the way we store the scales and the handling of global vars isn't very
-        # nice.
         var_scales["global"] = np.ones(op.num_global_var)
 
         # create default decision variable scales
