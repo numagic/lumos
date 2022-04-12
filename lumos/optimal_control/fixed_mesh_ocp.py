@@ -92,7 +92,7 @@ class FixedMeshOCP(ScaledMeshOCP):
         continuity_cons = LinearConstraints(
             constraints=self._continuity_constraints,
             num_in=self.num_dec,
-            num_con=self.num_total_con_interval,
+            num_con=self.num_continuity_cons,
             jacobian=self._continuity_jacobian,
             jacobian_structure=self._continuity_jacobianstructure(),
             cache_jacobian=False,

@@ -240,15 +240,14 @@ class LaptimeSimulation(FixedMeshOCP):
         return np.ravel(inputs_hess)
 
     def _inputs_penalty_hessian_structure(self):
-        base_rows = base_cols = self.dec_var_operator.get_group_indices_at_stage(
-            "inputs", stage=0
-        )
+        op = self.dec_var_operator
+        base_rows = base_cols = op.get_group_indices_at_stage("inputs", stage=0)
 
         rows, cols = create_offset_structure(
             base_rows,
             base_cols,
-            row_offset=self.num_var_stage,
-            col_offset=self.num_var_stage,
+            row_offset=op.num_var_stage,
+            col_offset=op.num_var_stage,
             num_blocks=self.num_stages,
         )
 
