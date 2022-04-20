@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1650489064882,
+  "lastUpdate": 1650491126441,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -440,6 +440,45 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/numagic/lumos/commit/d47ddd0888ddb25bb653f39120360ab83b7d92e9"
         },
         "date": 1650489063829,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "num_total",
+            "value": 25,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 0,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 48.6,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "yunlong@numagic.io",
+            "name": "yunlongxu",
+            "username": "yunlongxu-numagic"
+          },
+          "committer": {
+            "email": "92360845+yunlongxu-numagic@users.noreply.github.com",
+            "name": "Yunlong Xu",
+            "username": "yunlongxu-numagic"
+          },
+          "distinct": true,
+          "id": "5f4d772d52e362f22dc08bd0654a3f7839bc8a3e",
+          "message": "pre-release 0.0.2rc1",
+          "timestamp": "2022-04-20T23:35:05+02:00",
+          "tree_id": "f7257c3316b4173c0602a2b4a9cfa429316ec8f7",
+          "url": "https://github.com/numagic/lumos/commit/5f4d772d52e362f22dc08bd0654a3f7839bc8a3e"
+        },
+        "date": 1650491125970,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
