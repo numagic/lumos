@@ -91,8 +91,8 @@ class Trapezoidal(Transcription):
 class Collocation(Transcription):
     """Transcription with Legendre collocation
 
-    Interval of collocation is [-1, 1] or (-1, 1) or (-1, 1]. Therefore time needs to be
-    scaled by interval_time/2.
+    Interval of collocation is converted to [0, 1] from the standard of [-1, 1] to make
+    downstream computations easier.
 
     More details, refer to: AN OVERVIEW OF THREE PSEUDOSPECTRAL METHODS FOR THE
     NUMERICAL SOLUTION OF OPTIMAL CONTROL PROBLEMS
@@ -107,7 +107,7 @@ class Collocation(Transcription):
         self.num_stages_per_interval: int = num_stages
 
         self._set_collocation_points(num_stages)
-        self._set_interp_points_points()
+        self._set_interp_points()
 
         self.d_matrix: np.ndarray = build_lagrange_differential_matrix(
             support=self.interp_points, evaluation_points=self.collocation_points
@@ -122,14 +122,14 @@ class Collocation(Transcription):
         pass
 
     @abstractmethod
-    def _set_interp_points_points(self) -> None:
+    def _set_interp_points(self) -> None:
         pass
 
     def _get_A_matrix(self) -> np.ndarray:
         # multiply by two because collocation is in the domain of [-1, 1],
         # so to map to [0, 1] (easy to scale to interval time), we first need to multiply
         # by two.
-        return self.d_matrix * 2
+        return self.d_matrix
 
     def _get_B_matrix(self) -> np.ndarray:
         return diags([1], [1], shape=self._cont_matrix_shape).toarray()
@@ -142,13 +142,17 @@ class LGR(Collocation):
         super().__init__(num_stages=num_stages)
 
     def _set_collocation_points(self, num_stages: int) -> None:
-        self.collocation_points = get_collocation_points(
-            num_points=num_stages - 1, scheme=CollocationEnum.LGR
-        )
+        # map collocation points from [-1, 1] to [0, 1]
+        self.collocation_points = (
+            get_collocation_points(
+                num_points=num_stages - 1, scheme=CollocationEnum.LGR
+            )
+            + 1
+        ) / 2
 
-    def _set_interp_points_points(self) -> None:
-        # Add the -1 to the interp_points
-        self.interp_points = np.insert(self.collocation_points, 0, -1)
+    def _set_interp_points(self) -> None:
+        # Add the 0 to the interp_points
+        self.interp_points = np.insert(self.collocation_points, 0, 0)
 
 
 class LGRIntegral(LGR):
@@ -165,14 +169,11 @@ class LGRIntegral(LGR):
         )
 
     def _get_A_matrix(self) -> np.ndarray:
-        return (
-            np.hstack(
-                [
-                    -np.ones((self.num_stages_per_interval - 1, 1)),
-                    np.eye(self.num_stages_per_interval - 1),
-                ]
-            )
-            * 2
+        return np.hstack(
+            [
+                -np.ones((self.num_stages_per_interval - 1, 1)),
+                np.eye(self.num_stages_per_interval - 1),
+            ]
         )
 
     def _get_B_matrix(self) -> np.ndarray:
