@@ -475,7 +475,7 @@ class ScaledMeshOCP(CompositeProblem):
             if isinstance(self.transcription, LGR):
                 interval_mesh = (
                     interval * interval_length
-                    + (self.transcription.interp_points + 1) / 2 * interval_length
+                    + self.transcription.interp_points * interval_length
                 )
             else:
                 interval_mesh = np.array([interval, interval + 1]) * interval_length
