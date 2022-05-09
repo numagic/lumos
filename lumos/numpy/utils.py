@@ -1,12 +1,14 @@
-from collections import namedtuple
-import numpy as np
+import logging
 from contextlib import ContextDecorator
-from typing import Any, List, NamedTuple, Union
+from typing import Any, List, Union
 
 import casadi
 import jax.numpy as jnp
+import numpy as np
 
 import lumos.numpy as lnp
+
+logger = logging.getLogger(__name__)
 
 
 class use_backend(ContextDecorator):
@@ -127,7 +129,23 @@ def cmap(
         sample_arg = next(a for a in args if a is not None)
         batch = sample_arg.shape[0]
 
-        raw_mapped = fn.map(batch, "thread", num_workers)
+        # NOTE: Creating the mapped function costs quite a bit of overhead. Therefore we
+        # make the decorator stateful and caches the mapped function. As long as the
+        # batch size remains unchanged, we use the cached mapped function.
+        if not hasattr(fmapped, "batch_size"):
+            fmapped.batch_size = None
+
+        if not hasattr(fmapped, "raw_mapped"):
+            fmapped.raw_mapped = None
+
+        if batch != fmapped.batch_size:
+            logger.info(
+                f"cached batch size {fmapped.batch_size}. Got batch {batch}. "
+                "Updating mapped function"
+            )
+            # update batch_size and re-create raw-mapped
+            fmapped.batch_size = batch
+            fmapped.raw_mapped = fn.map(batch, "thread", num_workers)
 
         # Since Casadi must map all inputs, so
         # for inputs that we don't want to map (in_axes=None), we need to tile.
@@ -142,7 +160,7 @@ def cmap(
         # Casadi by default uses column vector, and hence maps both the inputs and ouputs
         # in row dimension, so we need to transpose both
         args = [a.T for a in args]
-        outputs = raw_mapped(*args)
+        outputs = fmapped.raw_mapped(*args)
 
         # Since casadi only concatenates on existing axis (and also it is limited to 2d)
         # The outputs have the following shape:
@@ -154,7 +172,8 @@ def cmap(
 
         # Now transpose the outputs, take care of multiple outputs if there are
         if sparse:
-            nnz = int(outputs.sparse().data.shape[-1] / batch)
+            nnz = int(outputs.nnz() / batch)
+
             # NOTE: here we do NOT need to do the reshape, as all we need is the
             # underlying flat continguous array of the matrix (because we use sparse
             # representation). And since the original outputs.sparse().data already
@@ -169,12 +188,21 @@ def cmap(
             # but at the same time, casadi is column major). This column major is not
             # an issue as long as the indices we pass for each unit problem are also
             # flattened with column major. See StateSpaceModel._make_casadi_model_algebra_cons
-            return np.reshape(outputs.sparse().data, (batch, nnz))
+            # check C++ API documentation here:
+            # http://casadi.sourceforge.net/v3.4.4/api/html/dd/df2/singletoncasadi_1_1Matrix.html#details
+            # NOTE: Both the nonzeros and the reshape calls cost some non-trivial
+            # overhead. For the LTC example with 2500 intervals LGR3, they cost roughly
+            # 0.1sec each
+            # this is the python API for the cpp get_nonzeros()
+            data = outputs.nonzeros()
+            outputs = np.reshape(data, (batch, nnz))
         else:
             if isinstance(outputs, tuple):
-                return tuple(np.array(o).T for o in outputs)
+                outputs = tuple(np.array(o).T for o in outputs)
             else:
-                return np.array(outputs).T
+                outputs = np.array(outputs).T
+
+        return outputs
 
     return fmapped
 
