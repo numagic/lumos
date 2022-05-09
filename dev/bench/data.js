@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1650903486533,
+  "lastUpdate": 1652122430500,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -533,6 +533,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "avg_success_iter",
             "value": 49.2,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "yunlong@numagic.io",
+            "name": "yunlongxu",
+            "username": "yunlongxu-numagic"
+          },
+          "committer": {
+            "email": "92360845+yunlongxu-numagic@users.noreply.github.com",
+            "name": "Yunlong Xu",
+            "username": "yunlongxu-numagic"
+          },
+          "distinct": true,
+          "id": "2856250bab35c468596cac7722148ec28f39d14f",
+          "message": "improve casadi backend performance\n\n- improve casadi backend performance significnatly for functions that\nare relatively 'light' to run. This is achieved via:\n1) caching the mapped casadi function for the same batch size, as\ncreating the mapped function itself self costs a non-negligible\noverhead.\n2) avoiding turning the casadi sparse matrix into scipy sparse format.",
+          "timestamp": "2022-05-09T20:42:34+02:00",
+          "tree_id": "db3a6f3fa97a5e170074bbaa73d0f22c7b49f412",
+          "url": "https://github.com/numagic/lumos/commit/2856250bab35c468596cac7722148ec28f39d14f"
+        },
+        "date": 1652122430051,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "num_total",
+            "value": 25,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 0,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 48.96,
             "unit": "iter"
           }
         ]
