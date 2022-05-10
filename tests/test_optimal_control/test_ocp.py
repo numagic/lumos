@@ -8,6 +8,7 @@ from parameterized import parameterized_class
 from scipy.sparse import coo_matrix
 
 from lumos.optimal_control.config import (
+    BoundaryConditionConfig,
     ScaleConfig,
     BoundConfig,
     ScaleConfig,
@@ -212,6 +213,24 @@ class TestOCP(unittest.TestCase):
             _udpate_and_assert(group="states", name="x", bound_vals=(-200, 200 * _ones))
 
         # TODO: Test set global var
+
+    def test_update_bounds_do_not_overwrite_bc(self):
+        """Ensure updating bounds after boundary conditions are set do not overwrite."""
+
+        expected_value = 0.0
+        bc_configs = (BoundaryConditionConfig(0, "states", "x", expected_value),)
+        self.ocp.update_boundary_conditions(bc_configs)
+
+        bound_configs = (BoundConfig("states", "x", (-1.0, 1.0)),)
+        self.ocp.update_bounds(bound_configs)
+
+        # After updating the general bounds, it shouldn't overwrite and relax the
+        # boundary conditions we set at stage 0!
+        actual_lb = self.ocp.get_lb("states", "x")[0]
+        self.assertAlmostEqual(actual_lb, expected_value)
+
+        actual_ub = self.ocp.get_ub("states", "x")[0]
+        self.assertAlmostEqual(actual_ub, expected_value)
 
     @unittest.skip(
         "After making ocp independent of Jax, does it really make sense to test the derivatives here?"
