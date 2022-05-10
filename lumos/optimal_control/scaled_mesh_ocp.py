@@ -140,7 +140,7 @@ class ScaledMeshOCP(CompositeProblem):
         self.update_bounds(sim_config.bounds)
 
         # Set specific boundary conditions of variables at certain stages
-        self.set_boundary_conditions(sim_config.boundary_conditions)
+        self.update_boundary_conditions(sim_config.boundary_conditions)
 
         # Set the constraint upper and lower bounds.
         self.set_cons()
@@ -667,7 +667,7 @@ class ScaledMeshOCP(CompositeProblem):
             self._constraints["model_algebra"].set_con_scales(model_algebra_scales)
             self._constraints["continuity"].set_con_scales(continuity_scales)
 
-    def set_boundary_conditions(
+    def update_boundary_conditions(
         self, boundary_conditions: Tuple[BoundaryConditionConfig]
     ):
         """Store new boundary conditions to the problem. Will append instead of reset."""

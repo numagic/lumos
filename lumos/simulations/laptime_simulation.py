@@ -141,10 +141,6 @@ class LaptimeSimulation(FixedMeshOCP):
         # Unfortunately setting track must happen AFTER problem construction because we
         # need to add track related bounds on top of existing bounds.
         super().__init__(model=model, sim_config=sim_config, mesh_scale=1.0)
-
-        # Must record the boundary condtiions as otherwise we might overwrite them when
-        # we set the track variable bounds
-        self._bc_configs = sim_config.boundary_conditions
         self.set_track(sim_config.track)
 
     @property
@@ -184,7 +180,6 @@ class LaptimeSimulation(FixedMeshOCP):
         )
 
         self.update_bounds(track_bounds)
-        self.set_boundary_conditions(self._bc_configs)
 
     def _build_objective(self):
         # Common objective regardless of the problem

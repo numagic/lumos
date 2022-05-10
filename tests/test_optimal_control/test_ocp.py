@@ -219,7 +219,7 @@ class TestOCP(unittest.TestCase):
 
         expected_value = 0.0
         bc_configs = (BoundaryConditionConfig(0, "states", "x", expected_value),)
-        self.ocp.set_boundary_conditions(bc_configs)
+        self.ocp.update_boundary_conditions(bc_configs)
 
         bound_configs = (BoundConfig("states", "x", (-1.0, 1.0)),)
         self.ocp.update_bounds(bound_configs)
