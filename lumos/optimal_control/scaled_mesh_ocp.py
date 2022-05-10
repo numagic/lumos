@@ -52,6 +52,11 @@ class ScaledMeshOCP(CompositeProblem):
     # No Global variables
     global_var_names: List[str] = ["mesh_scale"]
 
+    # Boundary condition configs. We need to record these as they could be overwritten
+    # by general bound settings, and it is messy to check which specific boundary
+    # conditions we have set just by looking at the upper and lower bound.
+    _boundary_conditions: Tuple[BoundaryConditionConfig] = ()
+
     # see: https://cyipopt.readthedocs.io/en/stable/reference.html
     # for callback arguments
     _metric_names: List[str] = [
@@ -134,7 +139,7 @@ class ScaledMeshOCP(CompositeProblem):
         self.set_default_bounds()
         self.update_bounds(sim_config.bounds)
 
-        # Set initial and final boundary conditions
+        # Set specific boundary conditions of variables at certain stages
         self.set_boundary_conditions(sim_config.boundary_conditions)
 
         # Set the constraint upper and lower bounds.
@@ -580,6 +585,10 @@ class ScaledMeshOCP(CompositeProblem):
             self.lb[idx] = lb
             self.ub[idx] = ub
 
+        # Apply the boundary conditions again, as when we set all the bounds, the
+        # boundary conditions will be overwritten.
+        self._apply_boundary_conditions()
+
     def set_scales(self, scale_configs: Tuple[ScaleConfig]):
         """Construct variable scales
 
@@ -661,7 +670,13 @@ class ScaledMeshOCP(CompositeProblem):
     def set_boundary_conditions(
         self, boundary_conditions: Tuple[BoundaryConditionConfig]
     ):
-        for bc in boundary_conditions:
+        """Store new boundary conditions to the problem. Will append instead of reset."""
+        self._boundary_conditions += boundary_conditions
+        self._apply_boundary_conditions()
+
+    def _apply_boundary_conditions(self):
+        """Apply the boundary conditions stored."""
+        for bc in self._boundary_conditions:
             self._set_var_bounds(
                 group=bc.group, name=bc.name, stage=bc.stage, bounds=bc.value
             )
