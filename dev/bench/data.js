@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1652122430500,
+  "lastUpdate": 1652184327167,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -572,6 +572,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "avg_success_iter",
             "value": 48.96,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "92360845+yunlongxu-numagic@users.noreply.github.com",
+            "name": "Yunlong Xu",
+            "username": "yunlongxu-numagic"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c89469703be24940c4d5c818463ec1ae34e4f190",
+          "message": "fix boundary condition bug\n\n- fix boundary condition overwritting bug, where updating bounds after\r\nboundary conditions are set will overwrite existing boundary conditions.\r\n- now that boundary conditions will be stored in the problem,, and\r\nappended at every call instead of resetting. The boundary conditions are\r\nthen reapplied everytime when either new boundary conditions are set or\r\nwhen the bounds are updated (updating bounds would otherwise overwrite\r\nboundary conditions already set)\r\n- rename to set_boundary_conditions to update_boundary_conditions to\r\nbe consistent with the bound setting method.\r\n-add corresponding tests",
+          "timestamp": "2022-05-10T13:56:31+02:00",
+          "tree_id": "d6f0b34f0ba8410a8dfda3f7c874e753df300228",
+          "url": "https://github.com/numagic/lumos/commit/c89469703be24940c4d5c818463ec1ae34e4f190"
+        },
+        "date": 1652184326719,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "num_total",
+            "value": 25,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 0,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 47.88,
             "unit": "iter"
           }
         ]
