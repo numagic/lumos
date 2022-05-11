@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1652187169307,
+  "lastUpdate": 1652301702698,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -635,6 +635,45 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/numagic/lumos/commit/55ebcf3819fb9355799506ce70175dda53c607c5"
         },
         "date": 1652187168862,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "num_total",
+            "value": 25,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 0,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 47.88,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "92360845+yunlongxu-numagic@users.noreply.github.com",
+            "name": "Yunlong Xu",
+            "username": "yunlongxu-numagic"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3b54a4caed02842ae2588875989ce512cd60d1bb",
+          "message": "Update colab examples",
+          "timestamp": "2022-05-11T22:32:20+02:00",
+          "tree_id": "8be403388018973fcd48a88450710dabdf08103d",
+          "url": "https://github.com/numagic/lumos/commit/3b54a4caed02842ae2588875989ce512cd60d1bb"
+        },
+        "date": 1652301701646,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
