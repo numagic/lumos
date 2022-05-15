@@ -145,7 +145,13 @@ def test_profile_nlp(backend: str, num_intervals: int):
     results = ocp.profile(x0, repeat=10, hessian=True)
 
     metrics = []
-    for name in ["objective", "gradient", "constraints", "jacobian", "hessian"]:
+    for name in [
+        "nlp.objective",
+        "nlp.gradient",
+        "nlp.constraints",
+        "nlp.jacobian",
+        "nlp.hessian",
+    ]:
         metrics.append(
             _create_metric(
                 ".".join([backend, str(num_intervals), name]), "sec", results[name]
