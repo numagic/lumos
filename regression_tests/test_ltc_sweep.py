@@ -13,6 +13,10 @@ from lumos.simulations.laptime_simulation import LaptimeSimulation
 logger = logging.getLogger()
 
 
+def _create_metric(name, unit, value):
+    return {"name": name, "unit": unit, "value": value}
+
+
 class TestTrackSweep(TestCase):
     def test_sweep(self):
 
@@ -102,9 +106,6 @@ class TestTrackSweep(TestCase):
         results.to_csv("track_sweep_results.csv")
         summary.to_csv("track_sweep_summary.csv")
 
-        def _create_metric(name, unit, value):
-            return {"name": name, "unit": unit, "value": value}
-
         # Create benchmark result for traclomg amd github page visualization
         # See: https://github.com/benchmark-action/github-action-benchmark
         # using customSmallerIsBetter, so need to make metrics also better when smaller
@@ -143,9 +144,13 @@ def test_profile_nlp(backend: str, num_intervals: int):
         _ = ocp.profile(x0, repeat=1, hessian=True)
     results = ocp.profile(x0, repeat=10, hessian=True)
 
-    metrics = {}
+    metrics = []
     for name in ["objective", "gradient", "constraints", "jacobian", "hessian"]:
-        metrics[".".join([backend, str(num_intervals), name])] = results[name]
+        metrics.append(
+            _create_metric(
+                ".".join([backend, str(num_intervals), name]), "sec", results[name]
+            )
+        )
 
     with open("summary.json", "a+") as outfile:
         json.dump(metrics, outfile)
