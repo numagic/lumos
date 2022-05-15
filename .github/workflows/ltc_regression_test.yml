@@ -22,20 +22,24 @@ jobs:
           environment-file: environment.yml
       - name: Install lumos
         run: python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
-      - name: Run LTC sweep
+      - name: Run LTC sweep and NLP profiling
         shell: bash -l {0}
         # This would fail if pytest fails, and will write out result files if successful
-        run: python3 -m unittest regression_tests.test_ltc_sweep -v
-          # conda install -y pytest parameterized
-          # pytest regression_tests/ -v
+        # Somehow we need to use python3 -m pytest to ensure that we're running with
+        # the correct python, and that's only for the regression tests folder...
+        run: |
+          conda env list
+          conda install -y pytest parameterized
+          which python
+          which python3
+          python3 -m pytest regression_tests/
       - uses: actions/upload-artifact@v3
         with:
-          path: results.csv
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v3
-        with:
-          path: summary.csv
-          if-no-files-found: error
+          path: |
+            track_sweep_results.csv
+            track_sweep_summary.csv
+            summary.json
+          if-no-files-found: error        
       # Download previous benchmark result from cache (if exists)
       - name: Download previous benchmark data
         # Only store reults and display if push to main

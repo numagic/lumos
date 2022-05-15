@@ -4,6 +4,7 @@ import os
 from unittest import TestCase
 
 import pandas as pd
+import pytest
 
 from lumos.models.composition import ModelMaker
 from lumos.models.tires.utils import create_params_from_tir_file
@@ -98,8 +99,8 @@ class TestTrackSweep(TestCase):
         )
 
         # Artifacts files for the record
-        results.to_csv("results.csv")
-        summary.to_csv("summary.csv")
+        results.to_csv("track_sweep_results.csv")
+        summary.to_csv("track_sweep_summary.csv")
 
         def _create_metric(name, unit, value):
             return {"name": name, "unit": unit, "value": value}
@@ -115,6 +116,36 @@ class TestTrackSweep(TestCase):
             ),
         ]
 
-        with open("summary.json", "w") as outfile:
+        with open("summary.json", "a+") as outfile:
             json.dump(metrics, outfile)
-        pass
+
+
+@pytest.mark.parametrize("backend", ["jax", "casadi"])
+@pytest.mark.parametrize("num_intervals", [100, 1000, 10000])
+def test_profile_nlp(backend: str, num_intervals: int):
+    # Quickest way is to run with jax and only compiling for the first solve
+    sim_config = LaptimeSimulation.get_sim_config(
+        num_intervals=num_intervals,
+        hessian_approximation="exact",
+        is_cyclic=True,
+        is_condensed=False,
+        backend=backend,
+        track="data/tracks/Catalunya.csv",
+        transcription="LGR",
+    )
+
+    model_config = ModelMaker.make_config("SimpleVehicleOnTrack")
+    ocp = LaptimeSimulation(model_config=model_config, sim_config=sim_config)
+
+    x0 = ocp.get_init_guess()
+    if backend == "jax":
+        # Trigger jax jitting, to remove it from the profiling
+        _ = ocp.profile(x0, repeat=1, hessian=True)
+    results = ocp.profile(x0, repeat=10, hessian=True)
+
+    metrics = {}
+    for name in ["objective", "gradient", "constraints", "jacobian", "hessian"]:
+        metrics[".".join([backend, str(num_intervals), name])] = results[name]
+
+    with open("summary.json", "a+") as outfile:
+        json.dump(metrics, outfile)

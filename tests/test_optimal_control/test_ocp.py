@@ -282,6 +282,9 @@ class TestOCP(unittest.TestCase):
         self.assertIn("model_algebra.constraints", results)
         self.assertIn("model_algebra.jacobian", results)
         self.assertNotIn("model_algebra.hessian", results)
+        self.assertIn("constraints", results)
+        self.assertIn("jacobian", results)
+        self.assertNotIn("hessian", results)
 
         # Time should be positive
         for k, v in results.items():
@@ -292,6 +295,9 @@ class TestOCP(unittest.TestCase):
         self.assertIn("model_algebra.constraints", results)
         self.assertIn("model_algebra.jacobian", results)
         self.assertIn("model_algebra.hessian", results)
+        self.assertIn("constraints", results)
+        self.assertIn("jacobian", results)
+        self.assertIn("hessian", results)
 
         # Time should be positive
         for k, v in results.items():
