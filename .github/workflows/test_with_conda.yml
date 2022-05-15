@@ -26,11 +26,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           auto-update-conda: true
           environment-file: environment.yml
-      - name: Install lumos
-        run: python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
       - name: Run unittest
         shell: bash -l {0}
         run: |
+          python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
           conda install -y pytest parameterized
           pytest tests/ examples/
   finished-unit-test-matrix-with-miniconda:
