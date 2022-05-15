@@ -349,3 +349,42 @@ class TesteOCPSolve(unittest.TestCase):
                 bc.value,
                 delta=1e-3,
             )
+
+
+def test_timing_extraction():
+    """Test that we can correctly extract ipopt timing when available"""
+    sim_config = DroneSimulation.get_sim_config(
+        num_intervals=99, hessian_approximation="exact", transcription="Trapezoidal",
+    )
+
+    ocp = DroneSimulation(sim_config=sim_config)
+
+    # with print level >= 4, we should get timing metrics
+    _, info = ocp.solve(
+        init_guess=ocp.get_init_guess(),
+        print_level=4,
+        print_timing_statistics="yes",
+        max_iter=500,
+    )
+
+    assert "nlp_time" in info
+    assert info["nlp_time"] > 0.0
+    assert "ipopt_time" in info
+    assert info["ipopt_time"] > 0.0
+
+    # if custom output file is defined, we should still get it
+    _, info = ocp.solve(
+        init_guess=ocp.get_init_guess(), output_file="myoutput.out", max_iter=500
+    )
+
+    assert "nlp_time" in info
+    assert info["nlp_time"] > 0.0
+    assert "ipopt_time" in info
+    assert info["ipopt_time"] > 0.0
+
+    # if print_timing_statistics == "no" -> no timing metrics
+    _, info = ocp.solve(
+        init_guess=ocp.get_init_guess(), print_timing_statistics="no", max_iter=500
+    )
+    assert "nlp_time" not in info
+    assert "ipopt_time" not in info

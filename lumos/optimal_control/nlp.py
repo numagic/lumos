@@ -1,4 +1,5 @@
 import logging
+import re
 from abc import ABC
 from functools import partial
 from os.path import exists
@@ -415,20 +416,28 @@ class NLPFunction(ABC):
             "print_level": 4,
             "nlp_scaling_method": "user-scaling",
             "max_iter": 100,
-            "print_timing_statistics": "no",
+            "print_timing_statistics": "yes",
             "hessian_approximation": self.hessian_approximation,
             "fixed_variable_treatment": "make_parameter_nodual",
+            "output_file": "ipopt.out",
         }
 
         # HACK: temporary hack for hsl library path
-        hsllib = "hsl/libcoinhsl.so"
+        import platform
+
+        if platform.system() == "Darwin":
+            hsllib = "hsl/libcoinhsl.dylib"
+        elif platform.system() == "Linux":
+            hsllib = "hsl/libcoinhsl.so"
+        elif platform.system() == "Widows":
+            hsllib = "hsl/libcoinhsl.dll"
+        else:
+            # what can it be?
+            pass
+
         if exists(hsllib):
             hsl_args = {"hsllib": hsllib, "linear_solver": "ma27"}
             default_options.update(hsl_args)
-
-        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-            default_options["print_level"] = 5
-            default_options["print_timing_statistics"] = "yes"
 
         return default_options
 
@@ -438,10 +447,10 @@ class NLPFunction(ABC):
         lagrange=[],
         zl=[],
         zu=[],
-        **options,
+        **user_options,
     ):
         ipopt_options = self._get_default_ipopt_options()
-        ipopt_options.update(options)
+        ipopt_options.update(user_options)
         nlp = self._construct_ipopt_problem(ipopt_options)
 
         # Set decision variable scaling: x_hat = scale*x
@@ -463,6 +472,25 @@ class NLPFunction(ABC):
             )
 
         info["num_iter"] = self._num_iter
+
+        # If print level >=4, print_timing_statistics == yes, and there is an
+        # outputfile defined, then read the ipopt time from the file
+        if (
+            ipopt_options["print_timing_statistics"] == "yes"
+            and ipopt_options["print_level"] >= 4
+            and ("output_file" in ipopt_options and ipopt_options["output_file"])
+        ):
+            patterns = {
+                "nlp_time": "Total seconds in NLP function evaluations \s*=\s*(\d+.\d+)",
+                "ipopt_time": "Total seconds in IPOPT \(w/o function evaluations\) \s*=\s*(\d+.\d+)",
+            }
+            with open(ipopt_options["output_file"]) as f:
+                for name, pattern in patterns.items():
+                    f.seek(0)
+                    for line in f:
+                        match = re.findall(pattern, line)
+                        if match:
+                            info[name] = float(match[0])
 
         return x, info
 
