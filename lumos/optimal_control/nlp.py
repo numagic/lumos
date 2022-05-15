@@ -2,6 +2,7 @@ import logging
 from abc import ABC
 from functools import partial
 from os.path import exists
+from timeit import default_timer as timer
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import cyipopt
@@ -609,7 +610,7 @@ class CompositeProblem(NLPFunction):
         return dict(zip(self._constraints.keys(), values))
 
     def profile(self, x0, repeat: int = 10, hessian: bool = False):
-        from timeit import default_timer as timer
+        logger.info("Time NLP execution")
 
         def time_function(f, name, repeat, *args):
             start = timer()
@@ -620,17 +621,25 @@ class CompositeProblem(NLPFunction):
             time_per_call = (end - start) / repeat
 
             logger.info(f"{name}: {time_per_call:.6f}")
+            return time_per_call
+
+        results = {}
 
         # Objectives
         for name, obj in self._objectives.items():
             for method in ["objective", "gradient", "hessian"]:
-                time_function(getattr(obj, method), name + "." + method, repeat, x0)
+                key = ".".join([name, method])
+                results[key] = time_function(getattr(obj, method), key, repeat, x0)
 
         for name, con in self._constraints.items():
             for method in ["constraints", "jacobian"]:
-                time_function(getattr(con, method), name + "." + method, repeat, x0)
+                key = ".".join([name, method])
+                results[key] = time_function(getattr(con, method), key, repeat, x0)
 
             if hessian:
                 # Hessian needs a different signature
                 lagrange = np.ones(con.num_con)
-                time_function(con.hessian, name + ".hessian", repeat, x0, lagrange)
+                key = ".".join([name, "hessian"])
+                results[key] = time_function(con.hessian, key, repeat, x0, lagrange)
+
+        return results
