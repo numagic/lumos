@@ -646,13 +646,15 @@ class CompositeProblem(NLPFunction):
         # Test the aggregate separately, as this is likely to be slightly higher than
         # the sum of the components due to additional overhead in aggregating
         for method in ["objective", "gradient", "constraints", "jacobian"]:
-            results[method] = time_function(getattr(self, method), key, repeat, x0)
-            if hessian:
-                # the problem hessian requires 'obj_factor' as well.
-                lagrange = np.ones(self.num_con)
-                obj_factor = 1.0
-                results["hessian"] = time_function(
-                    self.hessian, "hessian", repeat, x0, lagrange, obj_factor
-                )
+            key = ".".join(["nlp", method])
+            results[key] = time_function(getattr(self, method), key, repeat, x0)
+        if hessian:
+            # the problem hessian requires 'obj_factor' as well.
+            lagrange = np.ones(self.num_con)
+            obj_factor = 1.0
+            key = ".".join(["nlp", "hessian"])
+            results[key] = time_function(
+                self.hessian, key, repeat, x0, lagrange, obj_factor
+            )
 
         return results
