@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="numagic-lumos",
-    version="0.0.2rc2",
+    version="0.0.2rc3",
     author="Yunlong Xu",
     author_email="yunlong@numagic.io",
     description="lumos - scalable accelerated optimal control",
