@@ -189,15 +189,12 @@ class ScaledMeshOCP(CompositeProblem):
 
     def solve(self, *args, **kwargs):
         """Overwrite to add the logging of last iteration"""
-        # Do some timing
         x0 = self.get_init_guess()
         # If jax backend, do one call to invoke jit first
         if self.backend == "jax":
             logger.info("Triggering jax JIT")
             self.profile(x0, repeat=1, hessian=self.hessian_approximation == "exact")
             logger.info("Triggering jax JIT completed")
-        logger.info("Time NLP execution")
-        self.profile(x0, repeat=10, hessian=self.hessian_approximation == "exact")
         # Then solve.
         out = super().solve(*args, **kwargs)
         # TODO: perhaps a better way is to register pre-solve and post-solve tasks.

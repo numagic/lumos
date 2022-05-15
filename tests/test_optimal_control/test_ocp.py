@@ -272,6 +272,37 @@ class TestOCP(unittest.TestCase):
         )
         np.testing.assert_allclose(ours, theirs, rtol=1e-6)
 
+    def test_profile(self):
+        """Test profiling info are returned correctly"""
+
+        x0 = self.ocp.get_init_guess()
+
+        # profile without hessian
+        results = self.ocp.profile(x0, repeat=10, hessian=False)
+        self.assertIn("model_algebra.constraints", results)
+        self.assertIn("model_algebra.jacobian", results)
+        self.assertNotIn("model_algebra.hessian", results)
+        self.assertIn("constraints", results)
+        self.assertIn("jacobian", results)
+        self.assertNotIn("hessian", results)
+
+        # Time should be positive
+        for k, v in results.items():
+            self.assertGreater(v, 0.0)
+
+        # profile with hessian
+        results = self.ocp.profile(x0, repeat=10, hessian=True)
+        self.assertIn("model_algebra.constraints", results)
+        self.assertIn("model_algebra.jacobian", results)
+        self.assertIn("model_algebra.hessian", results)
+        self.assertIn("constraints", results)
+        self.assertIn("jacobian", results)
+        self.assertIn("hessian", results)
+
+        # Time should be positive
+        for k, v in results.items():
+            self.assertGreater(v, 0.0)
+
 
 # TODO: many combinations to test:
 # 1) hessian approximation

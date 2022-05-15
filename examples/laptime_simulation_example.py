@@ -64,6 +64,7 @@ def main():
     )
 
     x0 = ocp.get_init_guess()
+    ocp.profile(x0, repeat=10, hessian=True)
 
     solution, info = ocp.solve(
         x0,
