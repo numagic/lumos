@@ -641,6 +641,9 @@ class CompositeProblem(NLPFunction):
         logger.info("Time NLP execution")
 
         def time_function(f, name, repeat, *args):
+            # call once to remove any possible first call overhead (jitting, etc)
+            _ = f(*args)
+
             start = timer()
             for _ in range(repeat):
                 _ = f(*args)
