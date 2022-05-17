@@ -100,9 +100,8 @@ print(f"maneuveur time: {ocp.objective(solution):.3f} seconds")
 * [Envirohnment setup](#environment-setup)
 
 ## Quickstart: Colab in the Cloud
-`TODO`: update the link since the notebooks only exist in the dev branch at the moment
-- [Laptime simulation notebook](https://github.com/numagic/lumos/blob/dev/colab/lumos_laptime_simulation.ipynb) for optimal laptime around a race track
-- [Brachistochrone notebook](https://github.com/numagic/lumos/blob/dev/colab/Brachistochrone.ipynb) of the Brachistochrone example with the end-to-end implementation with and without automatic differentiation
+- [Brachistochrone notebook](https://github.com/numagic/lumos/blob/main/tutorials/colab/Brachistochrone.ipynb) of the Brachistochrone example with the end-to-end implementation with and without automatic differentiation
+- [Laptime simulation notebook](https://github.com/numagic/lumos/blob/main/tutorials/colab/Laptime_simulation.ipynb) for optimal laptime around a race track, using GPUs.
 
 ## Environment setup
 **lumos** It is recommened to develop with lumos via two ways: using [**conda**](#setting-up-with-conda) or using [**docker environment**](#setting-up-with-docker), with the latter preferred, especially for developers as.
