@@ -204,6 +204,7 @@ From the speed perspetive, using conda directly seems to have a significant adva
 #### Setting up with Conda on M1 Mac
 It follows the general approach outlined [above](#setting-up-with-conda), but two main changes:
 1) install casadi with conda-forge instead of pip
+
 Modify the environment.yml to remove cyipopt (we'll install it from source later), and move casadi from pip dependency to conda dependency. Add jax and jaxlib to conda dependencies, as shown below:
 ```yaml
 channels:
@@ -220,7 +221,7 @@ dependencies:
     - pandas
 ```
 
-And then create and update the conda environment as[before](#setting-up-with-conda)
+And then create and update the conda environment as [before](#setting-up-with-conda)
 ```sh
 conda create -n lumos_m1 python=3.9
 conda env update --file environment.yml
@@ -238,6 +239,7 @@ cas.dot(aa, aa)
 ```
 
 2) install cyipopt from source
+
 Clone the cyipopt repo, and move into repo directory:
 ```sh
 git clone https://github.com/mechmotum/cyipopt.git
@@ -250,6 +252,10 @@ git checkout tags/v1.1.0
 ```
 
 Install the dependencies required (use [this](https://github.com/mechmotum/cyipopt/blob/5e371bebb85a6f9ce0a53ebdd78daf9c696e4e84/.github/workflows/test.yml#L29) as a reference)
+
+```sh
+conda install -q -y lapack "libblas=*=*netlib" cython>=0.26 "ipopt=3.14" numpy>=1.15 pkg-config>=0.29.2 setuptools>=39.0
+```
 
 Install from source
 ```sh
