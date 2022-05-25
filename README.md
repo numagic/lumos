@@ -196,8 +196,12 @@ then to start the GPU containers, use multiple docker-compose see [here](https:/
 docker-compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 ```
 
-### Environment setup on Macbook with M1 chip (Experimental)
-#### Conda on M1
+### Environment setup on Mac with M1 chip (Experimental)
+It is possible to set up the environment on Mac with M1 chip using both the conda and the docker approach described earlier, but both will require some customization steps to tackle general problems that arise from library/OS/chip compatibilty.
+
+From the speed perspetive, using conda directly seems to have a significant advantage, probably because it can better utilize the power of the M1 chip than via docker with emulation.
+
+#### Setting up with Conda on M1 Mac
 It follows the general approach outlined [above](#setting-up-with-conda), but two main changes:
 1) install casadi with conda-forge instead of pip
 Modify the environment.yml to remove cyipopt (we'll install it from source later), and move casadi from pip dependency to conda dependency. Add jax and jaxlib to conda dependencies, as shown below:
@@ -267,7 +271,32 @@ python examples/laptime_simulation_example.py
 ```
 
 
-#### Docker on M1
+#### Setting up with Docker on M1 Mac
+It is also possible to set up the dev enviornment using the same dev conatiner, but we would need to replace the jax dependencies in the container as they were built with AVX which is not supported for docker on M1 (which uses Rosetta emulation)
+
+So inside the container, one needs to replace `jax` and `jaxlib` with versions that are built WITHOUT AVX, see [here]([url](https://github.com/google/jax/issues/5501#issuecomment-1032891169))
+```sh
+conda install -c conda-forge jaxlib
+conda install -c conda-forge jax
+```
+And then all should just work as before.
+
+If one wants to build the corresponding container locally, this is equivalent to modifying the `enviorenment.yml` to:
+
+```yaml
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - cyipopt
+  - jax
+  - jaxlib
+  - pip
+  - pip:
+    - casadi
+    - pyarrow
+    - pandas
+```
 
 # Stargazers over time
 
