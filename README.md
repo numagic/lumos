@@ -196,6 +196,79 @@ then to start the GPU containers, use multiple docker-compose see [here](https:/
 docker-compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 ```
 
+### Environment setup on Macbook with M1 chip (Experimental)
+#### Conda on M1
+It follows the general approach outlined [above](#setting-up-with-conda), but two main changes:
+1) install casadi with conda-forge instead of pip
+Modify the environment.yml to remove cyipopt (we'll install it from source later), and move casadi from pip dependency to conda dependency. Add jax and jaxlib to conda dependencies, as shown below:
+```yaml
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - casadi
+  - jax
+  - jaxlib
+  - pip
+  - pip:
+    - casadi
+    - pyarrow
+    - pandas
+```
+
+And then create and update the conda environment as[before](#setting-up-with-conda)
+```sh
+conda create -n lumos_m1 python=3.9
+conda env update --file environment.yml
+```
+
+Check if jax and casadi are both working (in a python terminal)
+```python3
+import jax.numpy as jnp
+import numpy as np
+import casadi as cas
+aa = np.random.randn(10)
+
+jnp.dot(aa, aa)
+cas.dot(aa, aa)
+```
+
+2) install cyipopt from source
+Clone the cyipopt repo, and move into repo directory:
+```sh
+git clone https://github.com/mechmotum/cyipopt.git
+cd cyipopt
+```
+
+Check out a release tag (optional)
+```sh
+git checkout tags/v1.1.0
+```
+
+Install the dependencies required (use [this](https://github.com/mechmotum/cyipopt/blob/5e371bebb85a6f9ce0a53ebdd78daf9c696e4e84/.github/workflows/test.yml#L29) as a reference)
+
+Install from source
+```sh
+python setup.py install
+python -m pip install .
+```
+
+Check if cyipopt is working correctly
+```sh
+pip instal pytest
+pytest
+```
+
+
+Test if all components are all working correctly (using lumos examples)
+```sh
+cd ..
+python examples/laptime_simulation_example.py
+```
+
+
+#### Docker on M1
+
 # Stargazers over time
 
 [![Stargazers over time](https://starchart.cc/numagic/lumos.svg)](https://starchart.cc/numagic/lumos)
