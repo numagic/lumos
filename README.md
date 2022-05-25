@@ -196,6 +196,114 @@ then to start the GPU containers, use multiple docker-compose see [here](https:/
 docker-compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 ```
 
+### Environment setup on Mac with M1 chip (Experimental)
+It is possible to set up the environment on Mac with M1 chip using both the conda and the docker approach described earlier, but both will require some customization steps to tackle general problems that arise from library/OS/chip compatibilty.
+
+From the speed perspetive, using conda directly seems to have a significant advantage, probably because it can better utilize the power of the M1 chip than via docker with emulation.
+
+#### Setting up with Conda on M1 Mac
+It follows the general approach outlined [above](#setting-up-with-conda), but two main changes:
+1) install casadi with conda-forge instead of pip
+
+Modify the environment.yml to remove cyipopt (we'll install it from source later), and move casadi from pip dependency to conda dependency. Add jax and jaxlib to conda dependencies, as shown below:
+```yaml
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - casadi
+  - jax
+  - jaxlib
+  - pip
+  - pip:
+    - casadi
+    - pyarrow
+    - pandas
+```
+
+And then create and update the conda environment as [before](#setting-up-with-conda)
+```sh
+conda create -n lumos_m1 python=3.9
+conda env update --file environment.yml
+```
+
+Check if jax and casadi are both working (in a python terminal)
+```python3
+import jax.numpy as jnp
+import numpy as np
+import casadi as cas
+aa = np.random.randn(10)
+
+jnp.dot(aa, aa)
+cas.dot(aa, aa)
+```
+
+2) install cyipopt from source
+
+Clone the cyipopt repo, and move into repo directory:
+```sh
+git clone https://github.com/mechmotum/cyipopt.git
+cd cyipopt
+```
+
+Check out a release tag (optional)
+```sh
+git checkout tags/v1.1.0
+```
+
+Install the dependencies required (use [this](https://github.com/mechmotum/cyipopt/blob/5e371bebb85a6f9ce0a53ebdd78daf9c696e4e84/.github/workflows/test.yml#L29) as a reference)
+
+```sh
+conda install -q -y lapack "libblas=*=*netlib" cython>=0.26 "ipopt=3.14" numpy>=1.15 pkg-config>=0.29.2 setuptools>=39.0
+```
+
+Install from source
+```sh
+python setup.py install
+python -m pip install .
+```
+
+Check if cyipopt is working correctly
+```sh
+pip instal pytest
+pytest
+```
+
+
+Test if all components are all working correctly (using lumos examples)
+```sh
+cd ..
+python examples/laptime_simulation_example.py
+```
+
+
+#### Setting up with Docker on M1 Mac
+It is also possible to set up the dev enviornment using the same dev conatiner, but we would need to replace the jax dependencies in the container as they were built with AVX which is not supported for docker on M1 (which uses Rosetta emulation)
+
+So inside the container, one needs to replace `jax` and `jaxlib` with versions that are built WITHOUT AVX, see [here]([url](https://github.com/google/jax/issues/5501#issuecomment-1032891169))
+```sh
+conda install -c conda-forge jaxlib
+conda install -c conda-forge jax
+```
+And then all should just work as before.
+
+If one wants to build the corresponding container locally, this is equivalent to modifying the `enviorenment.yml` to:
+
+```yaml
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - cyipopt
+  - jax
+  - jaxlib
+  - pip
+  - pip:
+    - casadi
+    - pyarrow
+    - pandas
+```
+
 # Stargazers over time
 
 [![Stargazers over time](https://starchart.cc/numagic/lumos.svg)](https://starchart.cc/numagic/lumos)
