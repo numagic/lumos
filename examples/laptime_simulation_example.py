@@ -55,9 +55,11 @@ def main():
     sharpened_params = create_params_from_tir_file("data/tires/sharpened.tir")
     # FIXME: here we're using private methods. We should probably add a method to change
     # the parameters of an entire node in the ParameterTree
-    tire_params = params._get_subtree("vehicle.tire")
-    tire_params._data = sharpened_params
-    params.replace_subtree("vehicle.tire", tire_params)
+    for c in ["fl", "fr", "rl", "rr"]:
+        submodel_path = "vehicle.tire_" + c
+        tire_params = params._get_subtree(submodel_path)
+        tire_params._data = sharpened_params
+        params.replace_subtree(submodel_path, tire_params)
 
     ocp = LaptimeSimulation(
         model_params=params, model_config=model_config, sim_config=sim_config
