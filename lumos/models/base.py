@@ -74,8 +74,8 @@ def state_space_io(
 class ModelReturn(NamedTuple):
     """Return data structure for a static model."""
 
-    outputs: lnp.ndarray = np.array([])
-    residuals: lnp.ndarray = np.array([])
+    outputs: Dict = {}
+    residuals: Dict = {}
 
 
 class StateSpaceModelReturn(NamedTuple):
@@ -120,6 +120,26 @@ class Model(CompositeModel):
     def apply_and_forward(self, inputs, params):
         self.set_recursive_params(params)
         return self.forward(inputs)
+
+    def forward_with_arrays(self, inputs):
+
+        # Convert from arrays to dictionary
+        def _array_to_dict(names, values):
+            # We could do dict(zip(names, values)), but unfortunately this does NOT work
+            # for casadi as casadi matrices are designed to be non-iterable
+            # see: https://github.com/casadi/casadi/issues/2278
+            return {name: values[idx] for idx, name in enumerate(names)}
+
+        inputs = _array_to_dict(self.names.inputs, inputs)
+        model_return = self.forward(inputs)
+
+        # Convert from dictionary to arrays for the outputs
+        kwargs = {
+            g: self.make_vector(g, **getattr(model_return, g))
+            for g in model_return._fields
+        }
+
+        return ModelReturn(**kwargs)
 
     @classmethod
     def get_group_names(self, group: str) -> Tuple[str, ...]:

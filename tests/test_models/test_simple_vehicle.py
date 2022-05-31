@@ -15,8 +15,7 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
         yaw_rate = 0.0
         no_slip_omega = vx / self.model._params["rolling_radius"]
 
-        return self.model.make_vector(
-            group="states",
+        return dict(
             vx=vx,
             vy=vy,
             yaw_rate=yaw_rate,
@@ -38,19 +37,13 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
 
     def test_accel_straight(self):
         init_states = self._get_initial_states()
-        inputs = self.model.make_vector(
-            group="inputs", throttle=0.6, brake=0, steer=0, ax=0, ay=0
-        )
+        inputs = dict(throttle=0.6, brake=0, steer=0, ax=0, ay=0)
 
         model_return = self.model.forward(init_states, inputs)
 
         # Rear wheel should accelerate
-        self.assertGreater(
-            self.model.get_state(model_return.states_dot, "wheel_speed_rl"), 0
-        )
-        self.assertGreater(
-            self.model.get_state(model_return.states_dot, "wheel_speed_rr"), 0
-        )
+        self.assertGreater(model_return.states_dot["wheel_speed_rl"], 0)
+        self.assertGreater(model_return.states_dot["wheel_speed_rr"], 0)
 
         # After a few timesteps, the vehicle should be faster and still driving straight
         num_steps = 21
@@ -59,6 +52,7 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
         # Careful, numpy arrays are mutable!
         states = np.copy(init_states)
         for _ in range(num_steps):
+            breakpoint()
             model_return = self.model.forward(states, inputs)
             states += model_return.states_dot * time_step
 
@@ -74,9 +68,7 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
 
     def test_brake_straight(self):
         init_states = self._get_initial_states()
-        inputs = self.model.make_vector(
-            group="inputs", throttle=0.0, brake=0.1, steer=0, ax=0, ay=0
-        )
+        inputs = dict(throttle=0.0, brake=0.1, steer=0, ax=0, ay=0)
 
         model_return = self.model.forward(init_states, inputs)
 
@@ -108,9 +100,7 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
 
     def test_turn_left(self):
         init_states = self._get_initial_states()
-        inputs = self.model.make_vector(
-            group="inputs", throttle=0.0, brake=0, steer=0.2, ax=0, ay=0
-        )
+        inputs = dict(throttle=0.0, brake=0, steer=0.2, ax=0, ay=0)
 
         model_return = self.model.forward(init_states, inputs)
 
@@ -143,9 +133,7 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
 
     def test_turn_right(self):
         init_states = self._get_initial_states()
-        inputs = self.model.make_vector(
-            group="inputs", throttle=0.0, brake=0, steer=-0.2, ax=0, ay=0
-        )
+        inputs = dict(throttle=0.0, brake=0, steer=-0.2, ax=0, ay=0)
 
         model_return = self.model.forward(init_states, inputs)
 
@@ -186,9 +174,7 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
                 self.model.get_var_index("states", "wheel_speed_rl")
             ] = wheel_speed_rl
 
-            inputs = self.model.make_vector(
-                group="inputs", throttle=0.3, brake=0, steer=0.0, ax=0, ay=0
-            )
+            inputs = dict(throttle=0.3, brake=0, steer=0.0, ax=0, ay=0)
 
             model_return = self.model.forward(states, inputs)
             delta_torque = self.model.get_output(

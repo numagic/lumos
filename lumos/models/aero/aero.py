@@ -24,7 +24,7 @@ class ConstAero(AeroModel):
         return {"Cx": 0.6, "Cy": 0.0, "Cz": 1.9}
 
     def forward(self, inputs):
-        return ModelReturn(outputs=self.make_vector("outputs", **self._params))
+        return ModelReturn(outputs=self._params)
 
 
 class GPAero(AeroModel):

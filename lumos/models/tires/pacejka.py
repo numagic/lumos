@@ -240,18 +240,17 @@ class MF52(BaseTire):
         """
 
         # Unpack inputs
-        gamma = self.get_input(inputs, "gamma")
-        vx = self.get_input(inputs, "vx")
-        Fz = self.get_input(inputs, "Fz")
-        kappa = self.get_input(inputs, "kappa")
-        alpha = self.get_input(inputs, "alpha")
+        gamma = inputs["gamma"]
+        vx = inputs["vx"]
+        Fz = inputs["Fz"]
+        kappa = inputs["kappa"]
+        alpha = inputs["alpha"]
 
         (Fx, Fy, Mx, My, Mz, Kxk, Gxa, Kya, Gyk) = self._do_force_and_moments(
             kappa=kappa, alpha=alpha, gamma=gamma, vx=vx, Fz=Fz,
         )
 
-        outputs = self.make_vector(
-            group="outputs",
+        outputs = dict(
             Fx=Fx,
             Fy=Fy,
             Mx=Mx,

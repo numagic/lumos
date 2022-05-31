@@ -71,13 +71,12 @@ class BaseModelTest:
 
     @classmethod
     def setUpClass(cls):
-        # Record the original backend so we can store it if we've changed it.
         cls.model = cls.ModelClass()
         cls.params = cls.model.get_recursive_params()
 
-        # FIXME: here we can often run into divide by zero with these values
         cls.args_dict = {
-            g: cls.model.make_random_vector(group=g) for g in cls.forward_arguments
+            g: {n: 1.0 for n in cls.model.get_group_names(g)}
+            for g in cls.forward_arguments
         }
 
         if cls.need_mesh_input:
@@ -94,7 +93,10 @@ class BaseModelTest:
         # Casadi symbolic variables. (But maybe if the test works with float, then it
         # will work with symbolic variables as well?)
         if lnp.get_backend() == "casadi":
-            args_dict = {k: MX(v) for k, v in self.args_dict.items()}
+            args_dict = {
+                g: {name: MX(value) for name, value in d.items()}
+                for g, d in self.args_dict.items()
+            }
         else:
             args_dict = self.args_dict
 
@@ -121,14 +123,23 @@ class BaseModelTest:
     # casadi, but don't touch anything else to do with Casadi?
     @use_backends(backends=["casadi"])
     def test_code_generation(self):
-        args_dict = {k: MX.sym(k, np.size(v)) for k, v in self.args_dict.items()}
+        # Code generation requires using the array inputs interface
+        args_dict = {
+            k: MX.sym(k, self.model.get_num_vars(k)) for k, v in self.args_dict.items()
+        }
 
         # TODO: need to add parameter to the function
         f = Function(
-            "f", list(args_dict.values()), list(self.model.forward(**args_dict))
+            "f",
+            list(args_dict.values()),
+            list(self.model.forward_with_arrays(**args_dict)),
         )
-        # call the function
-        _ = f.call(list(self.args_dict.values()))
+
+        # call the function with concrete values
+        args_dict = {
+            k: self.model.make_vector(k, **v) for k, v in self.args_dict.items()
+        }
+        _ = f.call(list(args_dict.values()))
 
         # Note: name must start with a letter, have no underscore, doesn't
         # overlap with some special names. So can't pass in full path name.

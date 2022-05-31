@@ -5,7 +5,6 @@ from operator import add
 from typing import Any, Dict
 
 import numpy as np
-from jax import vmap
 
 import lumos.numpy as lnp
 from lumos.models.base import StateSpaceModel, StateSpaceModelReturn, state_space_io
@@ -132,17 +131,17 @@ class SimpleVehicle(StateSpaceModel):
         """
         params = self._params
 
-        throttle = self.get_input(inputs, "throttle")
-        brake = self.get_input(inputs, "brake")
-        steer = self.get_input(inputs, "steer")
-        ax_in = self.get_input(inputs, "ax")
-        ay_in = self.get_input(inputs, "ay")
+        throttle = inputs["throttle"]
+        brake = inputs["brake"]
+        steer = inputs["steer"]
+        ax_in = inputs["ax"]
+        ay_in = inputs["ay"]
 
-        vx = self.get_state(states, "vx")
-        vy = self.get_state(states, "vy")
-        yaw_rate = self.get_state(states, "yaw_rate")
+        vx = states["vx"]
+        vy = states["vy"]
+        yaw_rate = states["yaw_rate"]
 
-        wheel_speed = {c: self.get_state(states, f"wheel_speed_{c}") for c in _corners}
+        wheel_speed = {c: states[f"wheel_speed_{c}"] for c in _corners}
 
         max_power = params["max_power"]
         max_steer_angle = params["max_steer_angle"]
@@ -205,16 +204,15 @@ class SimpleVehicle(StateSpaceModel):
         aero_model = self.get_submodel("aero")
 
         # FIXME: we use some dummy inputs for speed evaluation only for now.
-        aero_inputs = aero_model.make_vector(
-            "inputs", front_ride_height=vx, rear_ride_height=vy, yaw=yaw_rate,
-        )
+        aero_inputs = dict(front_ride_height=vx, rear_ride_height=vy, yaw=yaw_rate)
 
         # FIXME: aero sign convention
         aero_return = self.get_submodel("aero").forward(aero_inputs)
         aero_coeff = aero_return.outputs
-        aero_forces = aero_coeff * (0.5 * air_density * (vx ** 2 + vy ** 2))
 
-        Fz_total = vehicle_mass * gravity + aero_forces[Vector3dEnum.Z]
+        Fz_total = vehicle_mass * gravity + aero_coeff["Cz"] * (
+            0.5 * air_density * (vx ** 2 + vy ** 2)
+        )
 
         # Compute tire load
         # TODO: currently we ignore
@@ -292,10 +290,7 @@ class SimpleVehicle(StateSpaceModel):
             slips["slip_ratio_" + c] = kappa
             slips["slip_angle_" + c] = alpha
 
-            tire_model = self.get_submodel("tire_" + c)
-
-            inputs = tire_model.make_vector(
-                group="inputs",
+            inputs = dict(
                 Fz=wheel_load[c],
                 kappa=kappa,
                 alpha=alpha * mirror_coeff[c],
@@ -303,15 +298,10 @@ class SimpleVehicle(StateSpaceModel):
                 gamma=0.0 * mirror_coeff[c],  # TODO: hardcoded for now
             )
 
-            outputs = tire_model.forward(inputs).outputs
-
+            outputs = self.get_submodel("tire_" + c).forward(inputs).outputs
             # TODO: tire moments are not taken into account yet.
             tire_force_in_wheel_coordinate[c] = lnp.array(
-                [
-                    tire_model.get_output(outputs, "Fx"),
-                    tire_model.get_output(outputs, "Fy") * mirror_coeff[c],
-                    wheel_load[c],
-                ]
+                [outputs["Fx"], outputs["Fy"] * mirror_coeff[c], wheel_load[c],]
             )
 
         # Transform tire forces to body coordinate
@@ -328,7 +318,9 @@ class SimpleVehicle(StateSpaceModel):
 
         # aero force in body coordinate
         # FIXME: drag should be absolute speed
-        drag = lnp.array([-aero_forces[Vector3dEnum.X], 0, 0])
+        drag = lnp.array(
+            [-aero_coeff["Cx"] * (0.5 * air_density * (vx ** 2 + vy ** 2)), 0, 0]
+        )
 
         # Sum up all the forces
         total_force_on_body = reduce(add, tire_force_in_body_coordinate.values())
@@ -352,19 +344,17 @@ class SimpleVehicle(StateSpaceModel):
         vx_dot = ax + yaw_rate * vy
         vy_dot = ay - yaw_rate * vx
 
-        states_dot = self.make_vector(
-            group="states",
-            vx=vx_dot,
-            vy=vy_dot,
-            yaw_rate=yaw_accel,
-            wheel_speed_fl=wheel_speed_dot["fl"],
-            wheel_speed_fr=wheel_speed_dot["fr"],
-            wheel_speed_rl=wheel_speed_dot["rl"],
-            wheel_speed_rr=wheel_speed_dot["rr"],
+        states_dot = dict(
+            vx_dot=vx_dot,
+            vy_dot=vy_dot,
+            yaw_rate_dot=yaw_accel,
+            wheel_speed_fl_dot=wheel_speed_dot["fl"],
+            wheel_speed_fr_dot=wheel_speed_dot["fr"],
+            wheel_speed_rl_dot=wheel_speed_dot["rl"],
+            wheel_speed_rr_dot=wheel_speed_dot["rr"],
         )
 
-        outputs = self.make_vector(
-            group="outputs",
+        outputs = dict(
             ax=ax,
             ay=ay,
             drive_torque_rl=drive_torque_rl,
@@ -384,7 +374,7 @@ class SimpleVehicle(StateSpaceModel):
             **slips,
         )
 
-        residuals = self.make_vector(group="residuals", ax=ax - ax_in, ay=ay - ay_in)
+        residuals = dict(ax=ax - ax_in, ay=ay - ay_in)
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs, residuals=residuals,
         )

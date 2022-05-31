@@ -1,6 +1,7 @@
 import logging
 import os
 
+from lumos.models.composition import ModelMaker
 from lumos.models.simple_vehicle_on_track import SimpleVehicleOnTrack
 from lumos.models.tires.utils import create_params_from_tir_file
 from lumos.simulations.laptime_simulation import LaptimeSimulation
@@ -37,7 +38,9 @@ def main():
     model_config = SimpleVehicleOnTrack.get_recursive_default_model_config()
 
     # EXAMPLE: change tire model
-    # model_config.replace_subtree("vehicle.tire", ModelMaker.make_config("PerantoniTire"))
+    # model_config.replace_subtree(
+    #     "vehicle.tire", ModelMaker.make_config("PerantoniTire")
+    # )
 
     # EXMAPLE: change an aero model
     # model_config.replace_subtree("vehicle.aero", ModelMaker.make_config("MLPAero"))

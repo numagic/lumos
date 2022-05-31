@@ -51,21 +51,13 @@ class SimpleVehicleOnTrack(StateSpaceModel):
         # work --> this is very dangerous as it just runs away silently with wrong
         # input size.
         vehicle_inputs = {
-            k: self.get_input(inputs, k)
-            for k in self.get_submodel("vehicle").get_group_names("inputs")
+            k: inputs[k] for k in self.get_submodel("vehicle").get_group_names("inputs")
         }
-        vehicle_inputs = self.get_submodel("vehicle").make_vector(
-            group="inputs", **vehicle_inputs
-        )
 
         # Pick out vehicle states
-        vehicle_states = self.get_submodel("vehicle").make_vector(
-            group="states",
-            **{
-                k: self.get_state(states, k)
-                for k in self.get_submodel("vehicle").get_group_names("states")
-            }
-        )
+        vehicle_states = {
+            k: states[k] for k in self.get_submodel("vehicle").get_group_names("states")
+        }
 
         # Pick out vehicle params. NOT DONE! NOT EASY!
         vehicle_return = self.get_submodel("vehicle").forward(
@@ -74,29 +66,19 @@ class SimpleVehicleOnTrack(StateSpaceModel):
 
         # Call Kinematics model
         # Pick out states
-        kinematic_states = self.get_submodel("kinematics").make_vector(
-            group="states",
-            **{
-                k: self.get_state(states, k)
-                for k in self.get_submodel("kinematics").get_group_names("states")
-            }
-        )
+        kinematic_states = {
+            k: states[k]
+            for k in self.get_submodel("kinematics").get_group_names("states")
+        }
 
         # pick out inputs
         # NOTE: this step is very custom, because the inputs come from vehicle model
         # outputs
-        inputs_from_vehicle = {
-            k: self.get_submodel("vehicle").get_state(vehicle_states, k)
-            for k in ("vx", "vy", "yaw_rate")
-        }
+        inputs_from_vehicle = {k: vehicle_states[k] for k in ("vx", "vy", "yaw_rate")}
 
-        track_inputs = {
-            k: self.get_input(inputs, k) for k in ["track_curvature", "track_heading"]
-        }
+        track_inputs = {k: inputs[k] for k in ["track_curvature", "track_heading"]}
 
-        kinematic_inputs = self.get_submodel("kinematics").make_vector(
-            group="inputs", **track_inputs, **inputs_from_vehicle
-        )
+        kinematic_inputs = dict(**track_inputs, **inputs_from_vehicle)
 
         # Pick out vehicle params. NOT DONE! NOT EASY!
         kinematics_return = self.get_submodel("kinematics").forward(
@@ -110,14 +92,13 @@ class SimpleVehicleOnTrack(StateSpaceModel):
         # ordering when the are created
 
         # Convert to distance domain derivatives
-        dt_ds = self.get_submodel("kinematics").get_state(
-            kinematics_return.states_dot, "time"
-        )
-        states_dot = lnp.concatenate(
-            [kinematics_return.states_dot, vehicle_return.states_dot * dt_ds]
-        )
+        dt_ds = kinematics_return.states_dot["time_dot"]
+        states_dot = {
+            **kinematics_return.states_dot,
+            **{k: v * dt_ds for k, v in vehicle_return.states_dot.items()},
+        }
 
-        outputs = lnp.concatenate([kinematics_return.outputs, vehicle_return.outputs])
+        outputs = {**kinematics_return.outputs, **vehicle_return.outputs}
 
         residuals = vehicle_return.residuals
 
