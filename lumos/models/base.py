@@ -84,10 +84,10 @@ class StateSpaceModelReturn(NamedTuple):
     # NOTE: we use np empty array instead of lnp.array([]) here because the type is
     # not really affected by user backend choice as it's determined already during the
     # import time as the default values.
-    states_dot: lnp.ndarray = np.array([])
-    outputs: lnp.ndarray = np.array([])
-    con_outputs: lnp.ndarray = np.array([])
-    residuals: lnp.ndarray = np.array([])
+    states_dot: Dict = {}
+    outputs: Dict = {}
+    con_outputs: Dict = {}
+    residuals: Dict = {}
 
 
 class Model(CompositeModel):
@@ -248,7 +248,7 @@ class StateSpaceModel(Model):
 
     def apply_and_forward(self, states, inputs, mesh, params):
         self.set_recursive_params(params)
-        return self.forward(states, inputs, mesh)
+        return self.forward_with_arrays(states, inputs, mesh)
 
     def make_state_space_model_return(
         self,
@@ -264,6 +264,7 @@ class StateSpaceModel(Model):
 
         if residuals is not None:
             kwargs["residuals"] = residuals
+
         return StateSpaceModelReturn(**kwargs)
 
     def _check_names(self):
@@ -273,10 +274,7 @@ class StateSpaceModel(Model):
                 raise ValueError(f"constraint outputs {c} not found in outputs")
 
     def _extract_con_outputs(self, outputs: lnp.ndarray) -> lnp.ndarray:
-        con_outputs_dict = {
-            c: self.get_output(outputs, c) for c in self.get_group_names("con_outputs")
-        }
-        return self.make_vector(group="con_outputs", **con_outputs_dict)
+        return {c: outputs[c] for c in self.get_group_names("con_outputs")}
 
     @property
     def num_implicit_res(self):
@@ -292,6 +290,27 @@ class StateSpaceModel(Model):
 
     def get_state(self, states: lnp.ndarray, name: str) -> float:
         return states[self.get_var_index(group="states", name=name)]
+
+    def forward_with_arrays(self, states, inputs, mesh):
+
+        # Convert from arrays to dictionary
+        def _array_to_dict(names, values):
+            # We could do dict(zip(names, values)), but unfortunately this does NOT work
+            # for casadi as casadi matrices are designed to be non-iterable
+            # see: https://github.com/casadi/casadi/issues/2278
+            return {name: values[idx] for idx, name in enumerate(names)}
+
+        states = _array_to_dict(self.names.states, states)
+        inputs = _array_to_dict(self.names.inputs, inputs)
+        model_return = self.forward(states, inputs, mesh)
+
+        # Convert from dictionary to arrays for the outputs
+        kwargs = {
+            g: self.make_vector(g, **getattr(model_return, g))
+            for g in model_return._fields
+        }
+
+        return StateSpaceModelReturn(**kwargs)
 
     def implicit(
         self,
@@ -313,7 +332,7 @@ class StateSpaceModel(Model):
         is a hard-coded limitation of the current design.
         """
 
-        model_return = self.forward(states, inputs, mesh)
+        model_return = self.forward_with_arrays(states, inputs, mesh)
 
         # TODO: here we return an array, but maybe we should at least always check
         # (especially for user-defined ones) that the residual size is correct.
@@ -544,6 +563,7 @@ class StateSpaceModel(Model):
         cfile = filename + ".c"
         # FIXME: path management, currently local directory only
         codegen = cas.CodeGenerator(cfile)
+
         codegen.add(
             cas.Function(
                 "forward", [states, inputs, mesh, cas_flat_params], [*model_return]

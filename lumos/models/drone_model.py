@@ -27,25 +27,20 @@ class DroneModel(StateSpaceModel):
         mesh: float = 0.0,  # time invariant model
     ) -> StateSpaceModelReturn:
         params = self._params
-        theta = self.get_state(states, "theta")
-        x_dot_dot = self.get_input(inputs, "f") * lnp.sin(theta)
-        z_dot_dot = self.get_input(inputs, "f") * lnp.cos(theta) - params["gravity"]
+        theta = states["theta"]
+        x_dot_dot = inputs["f"] * lnp.sin(theta)
+        z_dot_dot = inputs["f"] * lnp.cos(theta) - params["gravity"]
 
         # Assemble result
-        states_dot = self.make_vector(
-            group="states",
-            x=self.get_state(states, "x_dot"),
-            x_dot=x_dot_dot,
-            z=self.get_state(states, "z_dot"),
-            z_dot=z_dot_dot,
-            theta=self.get_input(inputs, "omega"),
+        states_dot = dict(
+            x_dot=states["x_dot"],
+            x_dot_dot=x_dot_dot,
+            z_dot=states["z_dot"],
+            z_dot_dot=z_dot_dot,
+            theta_dot=inputs["omega"],
         )
 
-        outputs = self.make_vector(
-            group="outputs",
-            sin_theta=lnp.sin(theta),
-            f_omega=self.get_input(inputs, "omega") * self.get_input(inputs, "f"),
-        )
+        outputs = dict(sin_theta=lnp.sin(theta), f_omega=inputs["omega"] * inputs["f"],)
 
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs,
