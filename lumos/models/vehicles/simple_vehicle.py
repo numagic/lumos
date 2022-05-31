@@ -5,7 +5,6 @@ from operator import add
 from typing import Any, Dict
 
 import numpy as np
-from jax import vmap
 
 import lumos.numpy as lnp
 from lumos.models.base import StateSpaceModel, StateSpaceModelReturn, state_space_io
@@ -202,15 +201,11 @@ class SimpleVehicle(StateSpaceModel):
             "rr": total_brake_torque * (1 - brake_balance) * 0.5,
         }
 
-        aero_model = self.get_submodel("aero")
-
         # FIXME: we use some dummy inputs for speed evaluation only for now.
-        aero_inputs = aero_model.make_vector(
-            "inputs", front_ride_height=vx, rear_ride_height=vy, yaw=yaw_rate,
-        )
-
         # FIXME: aero sign convention
-        aero_return = self.get_submodel("aero").forward(aero_inputs)
+        aero_return = self.call_submodel(
+            "aero", front_ride_height=vx, rear_ride_height=vy, yaw=yaw_rate
+        )
         aero_coeff = aero_return.outputs
         aero_forces = aero_coeff * (0.5 * air_density * (vx ** 2 + vy ** 2))
 
@@ -305,7 +300,6 @@ class SimpleVehicle(StateSpaceModel):
 
             outputs = tire_model.forward(inputs).outputs
 
-            # TODO: tire moments are not taken into account yet.
             tire_force_in_wheel_coordinate[c] = lnp.array(
                 [
                     tire_model.get_output(outputs, "Fx"),

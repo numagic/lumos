@@ -29,8 +29,7 @@ class TestModekMaker(TestCase):
         ModelMaker.add_to_registry(DummyRigidVehicle)
 
         self.assertEqual(
-            ModelMaker.get_model_class(DummyRigidVehicle.__name__),
-            DummyRigidVehicle,
+            ModelMaker.get_model_class(DummyRigidVehicle.__name__), DummyRigidVehicle,
         )
 
     def test_make_config(self):
@@ -56,8 +55,7 @@ class TestModekMaker(TestCase):
         direct_submodel_config = DummyRigidVehicle.get_default_submodel_config()
         for name, type_name in direct_submodel_config.items():
             self.assertIsInstance(
-                model.get_submodel(name),
-                ModelMaker.get_model_class(type_name),
+                model.get_submodel(name), ModelMaker.get_model_class(type_name),
             )
 
         # Check grandchildren model type
@@ -70,8 +68,7 @@ class TestModekMaker(TestCase):
         direct_submodel_config = DummyRigidVehicle.get_default_submodel_config()
         for name, type_name in direct_submodel_config.items():
             self.assertIsInstance(
-                model.get_submodel(name),
-                ModelMaker.get_model_class(type_name),
+                model.get_submodel(name), ModelMaker.get_model_class(type_name),
             )
 
         # Check grandchildren model type
@@ -154,8 +151,7 @@ class TestModelComposition(TestCase):
             default_model.get_submodel("aero")._params["cz_modifier"], cz_modifier
         )
         np.testing.assert_allclose(
-            default_model.get_submodel("aero.base")._params["alpha"],
-            alpha,
+            default_model.get_submodel("aero.base")._params["alpha"], alpha,
         )
         self.assertEqual(default_model.get_submodel("tire")._params["mux"], mux)
 
@@ -168,8 +164,7 @@ class TestModelComposition(TestCase):
             new_model.get_submodel("aero")._params["cz_modifier"], cz_modifier
         )
         np.testing.assert_allclose(
-            new_model.get_submodel("aero.base")._params["alpha"],
-            alpha,
+            new_model.get_submodel("aero.base")._params["alpha"], alpha,
         )
         self.assertEqual(new_model.get_submodel("tire")._params["mux"], mux)
 

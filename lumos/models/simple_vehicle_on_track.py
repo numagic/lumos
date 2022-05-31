@@ -8,16 +8,16 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
 
 # Combine the signals to create the names. TODO: can we make it more automatic?
 @state_space_io(
-    states=TrackPosition2D.get_group_names("states")
-    + SimpleVehicle.get_group_names("states"),
-    inputs=SimpleVehicle.get_group_names("inputs")
+    states=TrackPosition2D.get_cls_group_names("states")
+    + SimpleVehicle.get_cls_group_names("states"),
+    inputs=SimpleVehicle.get_cls_group_names("inputs")
     + ("track_curvature", "track_heading"),
-    outputs=TrackPosition2D.get_group_names("outputs")
-    + SimpleVehicle.get_group_names("outputs"),
-    con_outputs=TrackPosition2D.get_group_names("con_outputs")
-    + SimpleVehicle.get_group_names("con_outputs"),
-    residuals=TrackPosition2D.get_group_names("residuals")
-    + SimpleVehicle.get_group_names("residuals"),
+    outputs=TrackPosition2D.get_cls_group_names("outputs")
+    + SimpleVehicle.get_cls_group_names("outputs"),
+    con_outputs=TrackPosition2D.get_cls_group_names("con_outputs")
+    + SimpleVehicle.get_cls_group_names("con_outputs"),
+    residuals=TrackPosition2D.get_cls_group_names("residuals")
+    + SimpleVehicle.get_cls_group_names("residuals"),
 )
 class SimpleVehicleOnTrack(StateSpaceModel):
     _submodel_names = ("vehicle", "kinematics")
