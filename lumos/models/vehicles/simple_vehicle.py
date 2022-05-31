@@ -66,28 +66,10 @@ def _rotate_z(theta: float) -> lnp.ndarray:
         "ay",
         "drive_torque_rl",
         "drive_torque_rr",
-        "Fx_tire_fl",
-        "Fy_tire_fl",
         "Fz_tire_fl",
-        "Fx_tire_fr",
-        "Fy_tire_fr",
         "Fz_tire_fr",
-        "Fx_tire_rl",
-        "Fy_tire_rl",
         "Fz_tire_rl",
-        "Fx_tire_rr",
-        "Fy_tire_rr",
         "Fz_tire_rr",
-        "slip_ratio_fl",
-        "slip_ratio_fr",
-        "slip_ratio_rl",
-        "slip_ratio_rr",
-        "slip_angle_fl",
-        "slip_angle_fr",
-        "slip_angle_rl",
-        "slip_angle_rr",
-    ),
-    con_outputs=(
         "slip_ratio_fl",
         "slip_ratio_fr",
         "slip_ratio_rl",
@@ -279,6 +261,7 @@ class SimpleVehicle(StateSpaceModel):
         mirror_coeff = {"fl": 1.0, "fr": -1.0, "rl": 1.0, "rr": -1.0}
         tire_force_in_wheel_coordinate = {}
         slips = {}
+        tire_outputs = {}
         for c, vel in corner_vel_in_wheel_coordinate.items():
             kappa = -(1 - rolling_radius * wheel_speed[c] / vx)
             # NOTE: this assumes vx > 0
@@ -299,6 +282,7 @@ class SimpleVehicle(StateSpaceModel):
             )
 
             outputs = tire_model.forward(inputs).outputs
+            tire_outputs["tire_" + c] = outputs
 
             tire_force_in_wheel_coordinate[c] = lnp.array(
                 [
@@ -357,25 +341,22 @@ class SimpleVehicle(StateSpaceModel):
             wheel_speed_rr=wheel_speed_dot["rr"],
         )
 
+        submodel_outputs = self.combine_submodel_outputs(
+            aero=aero_return.outputs, **tire_outputs
+        )
+
         outputs = self.make_vector(
             group="outputs",
             ax=ax,
             ay=ay,
             drive_torque_rl=drive_torque_rl,
             drive_torque_rr=drive_torque_rr,
-            Fx_tire_fl=tire_force_in_body_coordinate["fl"][Vector3dEnum.X],
-            Fy_tire_fl=tire_force_in_body_coordinate["fl"][Vector3dEnum.Y],
             Fz_tire_fl=tire_force_in_body_coordinate["fl"][Vector3dEnum.Z],
-            Fx_tire_fr=tire_force_in_body_coordinate["fr"][Vector3dEnum.X],
-            Fy_tire_fr=tire_force_in_body_coordinate["fr"][Vector3dEnum.Y],
             Fz_tire_fr=tire_force_in_body_coordinate["fr"][Vector3dEnum.Z],
-            Fx_tire_rl=tire_force_in_body_coordinate["rl"][Vector3dEnum.X],
-            Fy_tire_rl=tire_force_in_body_coordinate["rl"][Vector3dEnum.Y],
             Fz_tire_rl=tire_force_in_body_coordinate["rl"][Vector3dEnum.Z],
-            Fx_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.X],
-            Fy_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.Y],
             Fz_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.Z],
             **slips,
+            **submodel_outputs,
         )
 
         residuals = self.make_vector(group="residuals", ax=ax - ax_in, ay=ay - ay_in)

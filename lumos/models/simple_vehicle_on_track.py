@@ -12,10 +12,16 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
     + SimpleVehicle.get_cls_group_names("states"),
     inputs=SimpleVehicle.get_cls_group_names("inputs")
     + ("track_curvature", "track_heading"),
-    outputs=TrackPosition2D.get_cls_group_names("outputs")
-    + SimpleVehicle.get_cls_group_names("outputs"),
-    con_outputs=TrackPosition2D.get_cls_group_names("con_outputs")
-    + SimpleVehicle.get_cls_group_names("con_outputs"),
+    con_outputs=(
+        "vehicle.slip_ratio_fl",
+        "vehicle.slip_ratio_fr",
+        "vehicle.slip_ratio_rl",
+        "vehicle.slip_ratio_rr",
+        "vehicle.slip_angle_fl",
+        "vehicle.slip_angle_fr",
+        "vehicle.slip_angle_rl",
+        "vehicle.slip_angle_rr",
+    ),
     residuals=TrackPosition2D.get_cls_group_names("residuals")
     + SimpleVehicle.get_cls_group_names("residuals"),
 )
@@ -117,7 +123,11 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             [kinematics_return.states_dot, vehicle_return.states_dot * dt_ds]
         )
 
-        outputs = lnp.concatenate([kinematics_return.outputs, vehicle_return.outputs])
+        submodel_outputs = self.combine_submodel_outputs(
+            vehicle=vehicle_return.outputs, kinematics=kinematics_return.outputs
+        )
+
+        outputs = self.make_vector("outputs", **submodel_outputs)
 
         residuals = vehicle_return.residuals
 
