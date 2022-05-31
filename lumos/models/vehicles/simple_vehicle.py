@@ -103,14 +103,20 @@ def _rotate_z(theta: float) -> lnp.ndarray:
 class SimpleVehicle(StateSpaceModel):
     """2D kinematics Model with acceleration limit"""
 
-    _submodel_names = ("tire", "aero")
+    _submodel_names = ("tire_fl", "tire_fr", "tire_rl", "tire_rr", "aero")
 
     def __init__(self, model_config={}, params={}):
         super().__init__(model_config=model_config, params=params)
 
     @classmethod
     def get_default_submodel_config(cls):
-        return {"tire": "MF52", "aero": "ConstAero"}
+        return {
+            "tire_fl": "MF52",
+            "tire_fr": "MF52",
+            "tire_rl": "MF52",
+            "tire_rr": "MF52",
+            "aero": "ConstAero",
+        }
 
     def forward(
         self,
@@ -278,7 +284,6 @@ class SimpleVehicle(StateSpaceModel):
         mirror_coeff = {"fl": 1.0, "fr": -1.0, "rl": 1.0, "rr": -1.0}
         tire_force_in_wheel_coordinate = {}
         slips = {}
-        inputs_dict = {}
         for c, vel in corner_vel_in_wheel_coordinate.items():
             kappa = -(1 - rolling_radius * wheel_speed[c] / vx)
             # NOTE: this assumes vx > 0
@@ -287,7 +292,9 @@ class SimpleVehicle(StateSpaceModel):
             slips["slip_ratio_" + c] = kappa
             slips["slip_angle_" + c] = alpha
 
-            inputs_dict[c] = self.get_submodel("tire").make_vector(
+            tire_model = self.get_submodel("tire_" + c)
+
+            inputs = tire_model.make_vector(
                 group="inputs",
                 Fz=wheel_load[c],
                 kappa=kappa,
@@ -296,35 +303,13 @@ class SimpleVehicle(StateSpaceModel):
                 gamma=0.0 * mirror_coeff[c],  # TODO: hardcoded for now
             )
 
-        # TODO: unify API, remove if statement. We probably need something like a dict_map
-        # 1) numpy has as vectorize api, but it doesn't work at the moment, because we
-        # return a ModelReturn (and seems like jax could handle that as a container type)
-        # but numpy can't
-        # 2) casadi doesn't have a vectorize api
-        if lnp.get_backend() == "jax":
-            tire_model_return = vmap(self.get_submodel("tire").forward)(
-                lnp.vstack(inputs_dict.values())
-            )
-
-            # # convert to dict
-            outputs_dict = {
-                k: tire_model_return.outputs[idx]
-                for idx, k in enumerate(inputs_dict.keys())
-            }
-
-        else:
-            outputs_dict = {}
-            for c, inputs in inputs_dict.items():
-                outputs_dict[c] = self.get_submodel("tire").forward(inputs).outputs
-
-        for c, outputs in outputs_dict.items():
+            outputs = tire_model.forward(inputs).outputs
 
             # TODO: tire moments are not taken into account yet.
             tire_force_in_wheel_coordinate[c] = lnp.array(
                 [
-                    self.get_submodel("tire").get_output(outputs, "Fx"),
-                    self.get_submodel("tire").get_output(outputs, "Fy")
-                    * mirror_coeff[c],
+                    tire_model.get_output(outputs, "Fx"),
+                    tire_model.get_output(outputs, "Fy") * mirror_coeff[c],
                     wheel_load[c],
                 ]
             )

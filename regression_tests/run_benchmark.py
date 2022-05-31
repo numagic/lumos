@@ -51,19 +51,7 @@ def sweep_tracks():
 
     model_config = ModelMaker.make_config("SimpleVehicleOnTrack")
 
-    # Change the tire to sharpened
-    model = ModelMaker.make_model_from_config(model_config)
-    params = model.get_recursive_default_params()
-    sharpened_params = create_params_from_tir_file("data/tires/sharpened.tir")
-    # FIXME: here we're using private methods. We should probably add a method to change
-    # the parameters of an entire node in the ParameterTree
-    tire_params = params._get_subtree("vehicle.tire")
-    tire_params._data = sharpened_params
-    params.replace_subtree("vehicle.tire", tire_params)
-
-    ocp = LaptimeSimulation(
-        model_params=params, model_config=model_config, sim_config=sim_config
-    )
+    ocp = LaptimeSimulation(model_config=model_config, sim_config=sim_config)
 
     def _solve_with_track(track_file):
         logger.info(f"solving ltc for: {track_file}")
