@@ -17,20 +17,21 @@ def _create_metric(name, unit, value):
 
 class MetricGenerator:
     def create_metrics(self):
+        metrics = [_create_metric("test_metric", "sec", 1.23)]
         # Run jit profiling
-        metrics = profile_jax_jit()
+        # metrics = profile_jax_jit()
 
-        # Run nlp profiling
-        for backend, num_intervals in itertools.product(
-            ["casadi", "jax"], [100, 1000, 10000]
-        ):
-            logger.info(
-                f"profiling nlp with backend={backend}, num_intervals={num_intervals}"
-            )
-            metrics += profile_nlp(backend, num_intervals)
+        # # Run nlp profiling
+        # for backend, num_intervals in itertools.product(
+        #     ["casadi", "jax"], [100, 1000, 10000]
+        # ):
+        #     logger.info(
+        #         f"profiling nlp with backend={backend}, num_intervals={num_intervals}"
+        #     )
+        #     metrics += profile_nlp(backend, num_intervals)
 
-        # Run track sweep
-        metrics += sweep_tracks()
+        # # Run track sweep
+        # metrics += sweep_tracks()
 
         with open("summary.json", "w+") as outfile:
             json.dump(metrics, outfile)
