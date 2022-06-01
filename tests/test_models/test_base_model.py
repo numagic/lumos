@@ -350,7 +350,13 @@ class TestOutputsCollection(unittest.TestCase):
         )
         variant1_model = ModelMaker.make_model_from_config(variant1_config)
         self.assertNotIn("powertrain.engine.power", variant1_model.names.outputs)
-        pass
+
+        # Check that there are no duplicates
+        self.assertEqual(
+            len(set(base_model.names.outputs)),
+            len(base_model.names.outputs),
+            msg="Duplicates detected in model output names",
+        )
 
     def test_output_values_are_correctly_set_after_execution(self):
         base_config = ModelMaker.make_config("TestVehicle")

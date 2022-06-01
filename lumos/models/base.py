@@ -226,10 +226,8 @@ class Model(CompositeModel):
         return lnp.array(list(kwargs[name] for name in self.get_group_names(group)))
 
     def _collect_children_outputs(self):
-        if self.is_leaf():
-            children_outputs = self.names.outputs
-        else:
-            children_outputs = []
+        children_outputs = []
+        if not self.is_leaf():
             for submodel_name, model in self._submodels.items():
                 children_outputs += [
                     submodel_name + "." + n for n in model.names.outputs
