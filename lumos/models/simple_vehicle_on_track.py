@@ -7,7 +7,7 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
 
 
 NUM_OUTPUTS = 500
-OUTPUTS_NAMES = tuple([f"dummy_{i}" for i in range(NUM_OUTPUTS)])
+OUTPUT_NAMES = tuple([f"dummy_{i}" for i in range(NUM_OUTPUTS)])
 import numpy as np
 
 OUTPUT_VALUES = np.ones(NUM_OUTPUTS)
@@ -20,7 +20,7 @@ OUTPUT_VALUES = np.ones(NUM_OUTPUTS)
     + ("track_curvature", "track_heading"),
     outputs=TrackPosition2D.get_group_names("outputs")
     + SimpleVehicle.get_group_names("outputs")
-    + OUTPUTS_NAMES,
+    + OUTPUT_NAMES,
     con_outputs=TrackPosition2D.get_group_names("con_outputs")
     + SimpleVehicle.get_group_names("con_outputs"),
     residuals=TrackPosition2D.get_group_names("residuals")
