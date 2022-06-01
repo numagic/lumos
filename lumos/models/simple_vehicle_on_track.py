@@ -6,6 +6,12 @@ from lumos.models.kinematics import TrackPosition2D
 from lumos.models.vehicles.simple_vehicle import SimpleVehicle
 
 
+NUM_OUTPUTS = 500
+OUTPUTS_NAMES = tuple([f"dummy_{i}" for i in range(NUM_OUTPUTS)])
+import numpy as np
+
+OUTPUT_VALUES = np.ones(NUM_OUTPUTS)
+
 # Combine the signals to create the names. TODO: can we make it more automatic?
 @state_space_io(
     states=TrackPosition2D.get_group_names("states")
@@ -13,7 +19,8 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
     inputs=SimpleVehicle.get_group_names("inputs")
     + ("track_curvature", "track_heading"),
     outputs=TrackPosition2D.get_group_names("outputs")
-    + SimpleVehicle.get_group_names("outputs"),
+    + SimpleVehicle.get_group_names("outputs")
+    + OUTPUTS_NAMES,
     con_outputs=TrackPosition2D.get_group_names("con_outputs")
     + SimpleVehicle.get_group_names("con_outputs"),
     residuals=TrackPosition2D.get_group_names("residuals")
@@ -64,7 +71,7 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             **{
                 k: self.get_state(states, k)
                 for k in self.get_submodel("vehicle").get_group_names("states")
-            }
+            },
         )
 
         # Pick out vehicle params. NOT DONE! NOT EASY!
@@ -79,7 +86,7 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             **{
                 k: self.get_state(states, k)
                 for k in self.get_submodel("kinematics").get_group_names("states")
-            }
+            },
         )
 
         # pick out inputs
@@ -117,7 +124,9 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             [kinematics_return.states_dot, vehicle_return.states_dot * dt_ds]
         )
 
-        outputs = lnp.concatenate([kinematics_return.outputs, vehicle_return.outputs])
+        outputs = lnp.concatenate(
+            [kinematics_return.outputs, vehicle_return.outputs, OUTPUT_VALUES]
+        )
 
         residuals = vehicle_return.residuals
 
