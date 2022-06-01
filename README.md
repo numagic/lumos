@@ -10,6 +10,10 @@
 [![Downloads](https://pepy.tech/badge/numagic-lumos)](https://pepy.tech/project/numagic-lumos)
 
 
+[**Benchmark on main**](https://numagic.github.io/lumos/dev/bench/)
+| [**Benchmark on features**](https://numagic.github.io/lumos/dev/bench-features/)
+
+
 [**Optimal Control Example**](#optimal-control-example)
 | [**Quickstart**](#quickstart-colab-in-the-cloud)
 | [**Environment setup**](#environment-setup)
