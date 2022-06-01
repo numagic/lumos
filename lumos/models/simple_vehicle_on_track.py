@@ -125,7 +125,7 @@ class SimpleVehicleOnTrack(StateSpaceModel):
         )
 
         outputs = lnp.concatenate(
-            [kinematics_return.outputs, vehicle_return.outputs, OUTPUT_VALUES]
+            [kinematics_return.outputs, vehicle_return.outputs, OUTPUT_VALUES * dt_ds]
         )
 
         residuals = vehicle_return.residuals
