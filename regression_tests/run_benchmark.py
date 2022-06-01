@@ -6,7 +6,6 @@ import os
 import pandas as pd
 
 from lumos.models.composition import ModelMaker
-from lumos.models.tires.utils import create_params_from_tir_file
 from lumos.simulations.laptime_simulation import LaptimeSimulation
 
 logger = logging.getLogger()
@@ -18,7 +17,10 @@ def _create_metric(name, unit, value):
 
 class MetricGenerator:
     def create_metrics(self):
-        metrics = sweep_tracks()
+        # Run jit profiling
+        metrics = profile_jax_jit()
+
+        # Run nlp profiling
         for backend, num_intervals in itertools.product(
             ["casadi", "jax"], [100, 1000, 10000]
         ):
@@ -26,6 +28,9 @@ class MetricGenerator:
                 f"profiling nlp with backend={backend}, num_intervals={num_intervals}"
             )
             metrics += profile_nlp(backend, num_intervals)
+
+        # Run track sweep
+        metrics += sweep_tracks()
 
         with open("summary.json", "w+") as outfile:
             json.dump(metrics, outfile)
@@ -118,6 +123,40 @@ def sweep_tracks():
     return metrics
 
 
+def profile_jax_jit():
+    sim_config = LaptimeSimulation.get_sim_config(
+        num_intervals=250,
+        hessian_approximation="exact",
+        is_cyclic=True,
+        is_condensed=False,
+        backend="jax",
+        track="data/tracks/Catalunya.csv",
+        transcription="LGR",
+    )
+
+    model_config = ModelMaker.make_config("SimpleVehicleOnTrack")
+    ocp = LaptimeSimulation(model_config=model_config, sim_config=sim_config)
+
+    x0 = ocp.get_init_guess()
+    # Call just once, so approximately all time is jax jit time
+    results = ocp.profile(x0, repeat=1, hessian=True, call_once_before=False)
+
+    metrics = []
+    # NOTE: the nlp.constraints etc are called after model_algebra, which means jitting
+    # has already been triggered and completed. So we need to catch jitting time from
+    # the model_algebra calls.
+    for name in [
+        "model_algebra.constraints",
+        "model_algebra.jacobian",
+        "model_algebra.hessian",
+    ]:
+        metrics.append(
+            _create_metric(".".join(["jax_jit", name]), "sec", results[name])
+        )
+
+    return metrics
+
+
 def profile_nlp(backend: str, num_intervals: int):
     # Quickest way is to run with jax and only compiling for the first solve
     sim_config = LaptimeSimulation.get_sim_config(
@@ -134,9 +173,6 @@ def profile_nlp(backend: str, num_intervals: int):
     ocp = LaptimeSimulation(model_config=model_config, sim_config=sim_config)
 
     x0 = ocp.get_init_guess()
-    if backend == "jax":
-        # Trigger jax jitting, to remove it from the profiling
-        _ = ocp.profile(x0, repeat=1, hessian=True)
     results = ocp.profile(x0, repeat=10, hessian=True)
 
     metrics = []
