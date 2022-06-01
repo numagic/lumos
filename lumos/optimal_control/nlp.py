@@ -637,12 +637,15 @@ class CompositeProblem(NLPFunction):
         values = np.split(c, np.cumsum(indices[:-1]))
         return dict(zip(self._constraints.keys(), values))
 
-    def profile(self, x0, repeat: int = 10, hessian: bool = False):
+    def profile(
+        self, x0, repeat: int = 10, hessian: bool = False, call_once_before: bool = True
+    ):
         logger.info("Time NLP execution")
 
         def time_function(f, name, repeat, *args):
-            # call once to remove any possible first call overhead (jitting, etc)
-            _ = f(*args)
+            if call_once_before:
+                # call once to remove any possible first call overhead (jitting, etc)
+                _ = f(*args)
 
             start = timer()
             for _ in range(repeat):
