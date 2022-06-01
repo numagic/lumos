@@ -1,14 +1,5 @@
 name: ltc-regression-test
-on:
-  push:
-    branches:
-      - 'main'
-  pull_request:
-    # by default only opened, synchronize and reopened activity would trigger this event
-    # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
-    # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
-    branches:
-      - 'main'
+on: push
 
 jobs:
   run-ltc-regression-test:
