@@ -108,6 +108,17 @@ class Model(CompositeModel):
     ):
         super().__init__(model_config=model_config, params=params)
 
+        # automatically collect children outputs and add them to the parent outputs with
+        # structure
+        children_outputs = tuple(self._collect_children_outputs())
+
+        # HACK: namedtuples are immutable
+        print(self.names.outputs)
+        print(children_outputs)
+        self.names = self.names._replace(outputs=self.names.outputs + children_outputs)
+
+        pass
+
     @abstractmethod
     def forward(self, *args, **kwargs):
         """Abstract method for calling the model.
@@ -121,7 +132,14 @@ class Model(CompositeModel):
         self.set_recursive_params(params)
         return self.forward(inputs)
 
+    # HACK: temporarily keep this alive, remove later
     @classmethod
+    def get_cls_group_names(cls, group: str) -> Tuple[str, ...]:
+        """Return the names of variables inside an IO group."""
+
+        return getattr(cls.names, group)
+
+    # @classmethod
     def get_group_names(self, group: str) -> Tuple[str, ...]:
         """Return the names of variables inside an IO group."""
 
@@ -207,6 +225,37 @@ class Model(CompositeModel):
 
         return lnp.array(list(kwargs[name] for name in self.get_group_names(group)))
 
+    def _collect_children_outputs(self):
+        children_outputs = []
+        if not self.is_leaf():
+            for submodel_name, model in self._submodels.items():
+                children_outputs += [
+                    submodel_name + "." + n for n in model.names.outputs
+                ]
+
+        return children_outputs
+
+    def call_submodel(self, model_name, **kwargs):
+        model = self.get_submodel(model_name)
+        inputs = model.make_vector("inputs", **kwargs)
+        return model.forward(inputs)
+
+    def combine_submodel_outputs(self, **kwargs):
+        """combine the outputs from submodels into large dictionary
+        
+        kwargs: {name_of_submodel: vector_of_outputs}
+        """
+        combined_dict = {}
+        for k, v in kwargs.items():
+            submodel = self.get_submodel(k)
+            # TODO: maybe we could convert the following to a helper method?
+            submodel_outputs_dict = {
+                k + "." + n: submodel.get_output(v, n) for n in submodel.names.outputs
+            }
+            combined_dict.update(submodel_outputs_dict)
+
+        return combined_dict
+
     def plot(self, *args, **kwargs):
         raise NotImplementedError
 
@@ -216,7 +265,7 @@ class StateSpaceModel(Model):
 
     # We name the inputs to the system simply "inputs" instead of "controls" in control
     # literature. This is so that StateSpaceModel can be naturally seen as a child of
-    # the standard Model, where the only difference is the addition of states.
+    # the standard Mo del, where the only difference is the addition of states.
 
     # TODO: maybe we need a better name for this as this is now only used for the
     # flat input calls which is then used in ocp

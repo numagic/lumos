@@ -133,3 +133,14 @@ def main():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     main()
+
+import numpy as np
+
+
+def test_fn(input1, input2, input3):
+    return {
+        "sin_input1": np.sin(input1),
+        "sin_input2": np.cos(input2),
+        "sin_input3": np.sin(input3),
+    }
+

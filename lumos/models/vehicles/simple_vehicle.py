@@ -5,7 +5,6 @@ from operator import add
 from typing import Any, Dict
 
 import numpy as np
-from jax import vmap
 
 import lumos.numpy as lnp
 from lumos.models.base import StateSpaceModel, StateSpaceModelReturn, state_space_io
@@ -67,28 +66,10 @@ def _rotate_z(theta: float) -> lnp.ndarray:
         "ay",
         "drive_torque_rl",
         "drive_torque_rr",
-        "Fx_tire_fl",
-        "Fy_tire_fl",
         "Fz_tire_fl",
-        "Fx_tire_fr",
-        "Fy_tire_fr",
         "Fz_tire_fr",
-        "Fx_tire_rl",
-        "Fy_tire_rl",
         "Fz_tire_rl",
-        "Fx_tire_rr",
-        "Fy_tire_rr",
         "Fz_tire_rr",
-        "slip_ratio_fl",
-        "slip_ratio_fr",
-        "slip_ratio_rl",
-        "slip_ratio_rr",
-        "slip_angle_fl",
-        "slip_angle_fr",
-        "slip_angle_rl",
-        "slip_angle_rr",
-    ),
-    con_outputs=(
         "slip_ratio_fl",
         "slip_ratio_fr",
         "slip_ratio_rl",
@@ -202,15 +183,11 @@ class SimpleVehicle(StateSpaceModel):
             "rr": total_brake_torque * (1 - brake_balance) * 0.5,
         }
 
-        aero_model = self.get_submodel("aero")
-
         # FIXME: we use some dummy inputs for speed evaluation only for now.
-        aero_inputs = aero_model.make_vector(
-            "inputs", front_ride_height=vx, rear_ride_height=vy, yaw=yaw_rate,
-        )
-
         # FIXME: aero sign convention
-        aero_return = self.get_submodel("aero").forward(aero_inputs)
+        aero_return = self.call_submodel(
+            "aero", front_ride_height=vx, rear_ride_height=vy, yaw=yaw_rate
+        )
         aero_coeff = aero_return.outputs
         aero_forces = aero_coeff * (0.5 * air_density * (vx ** 2 + vy ** 2))
 
@@ -284,6 +261,7 @@ class SimpleVehicle(StateSpaceModel):
         mirror_coeff = {"fl": 1.0, "fr": -1.0, "rl": 1.0, "rr": -1.0}
         tire_force_in_wheel_coordinate = {}
         slips = {}
+        tire_outputs = {}
         for c, vel in corner_vel_in_wheel_coordinate.items():
             kappa = -(1 - rolling_radius * wheel_speed[c] / vx)
             # NOTE: this assumes vx > 0
@@ -304,8 +282,8 @@ class SimpleVehicle(StateSpaceModel):
             )
 
             outputs = tire_model.forward(inputs).outputs
+            tire_outputs["tire_" + c] = outputs
 
-            # TODO: tire moments are not taken into account yet.
             tire_force_in_wheel_coordinate[c] = lnp.array(
                 [
                     tire_model.get_output(outputs, "Fx"),
@@ -363,25 +341,22 @@ class SimpleVehicle(StateSpaceModel):
             wheel_speed_rr=wheel_speed_dot["rr"],
         )
 
+        submodel_outputs = self.combine_submodel_outputs(
+            aero=aero_return.outputs, **tire_outputs
+        )
+
         outputs = self.make_vector(
             group="outputs",
             ax=ax,
             ay=ay,
             drive_torque_rl=drive_torque_rl,
             drive_torque_rr=drive_torque_rr,
-            Fx_tire_fl=tire_force_in_body_coordinate["fl"][Vector3dEnum.X],
-            Fy_tire_fl=tire_force_in_body_coordinate["fl"][Vector3dEnum.Y],
             Fz_tire_fl=tire_force_in_body_coordinate["fl"][Vector3dEnum.Z],
-            Fx_tire_fr=tire_force_in_body_coordinate["fr"][Vector3dEnum.X],
-            Fy_tire_fr=tire_force_in_body_coordinate["fr"][Vector3dEnum.Y],
             Fz_tire_fr=tire_force_in_body_coordinate["fr"][Vector3dEnum.Z],
-            Fx_tire_rl=tire_force_in_body_coordinate["rl"][Vector3dEnum.X],
-            Fy_tire_rl=tire_force_in_body_coordinate["rl"][Vector3dEnum.Y],
             Fz_tire_rl=tire_force_in_body_coordinate["rl"][Vector3dEnum.Z],
-            Fx_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.X],
-            Fy_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.Y],
             Fz_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.Z],
             **slips,
+            **submodel_outputs,
         )
 
         residuals = self.make_vector(group="residuals", ax=ax - ax_in, ay=ay - ay_in)
