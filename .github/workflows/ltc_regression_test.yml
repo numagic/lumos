@@ -1,14 +1,5 @@
 name: ltc-regression-test
-on:
-  push:
-    branches:
-      - 'main'
-  pull_request:
-    # by default only opened, synchronize and reopened activity would trigger this event
-    # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
-    # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
-    branches:
-      - 'main'
+on: push
 
 jobs:
   run-ltc-regression-test:
@@ -44,7 +35,25 @@ jobs:
         with:
           path: ./cache
           key: ${{ runner.os }}-benchmark
-      # Run `github-action-benchmark` action
+      # Run `github-action-benchmark` action for features
+      - name: Store benchmark result for features
+        if: ${{ github.event_name == 'push' }}
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: customSmallerIsBetter
+          # Where the output from the benchmark tool is stored
+          output-file-path: summary.json
+          # Workflow will fail when an alert happens
+          fail-on-alert: False             
+          # Set auto-push to false since GitHub API token is not given
+          auto-push: False
+          # Need to ensure external-data-json-path is not set, otherwise won't create
+          # gh-pages branch
+          benchmark-data-dir-path: dev/bench-features
+      - name: Push benchmark result for features
+        if: ${{ github.event_name == 'push' }}      
+        run: git push 'https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/numagic/lumos.git' gh-pages:gh-pages        
+      # Run `github-action-benchmark` action for main only
       - name: Store benchmark result
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: benchmark-action/github-action-benchmark@v1
