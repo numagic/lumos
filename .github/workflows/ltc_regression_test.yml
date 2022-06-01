@@ -49,11 +49,10 @@ jobs:
           auto-push: False
           # Need to ensure external-data-json-path is not set, otherwise won't create
           # gh-pages branch
-          gh-pages-branch: gh-pages-features
           benchmark-data-dir-path: dev/bench-features
       - name: Push benchmark result for features
         if: ${{ github.event_name == 'push' }}      
-        run: git push 'https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/numagic/lumos.git' gh-pages-features:gh-pages-features        
+        run: git push 'https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/numagic/lumos.git' gh-pages:gh-pages        
       # Run `github-action-benchmark` action for main only
       - name: Store benchmark result
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
