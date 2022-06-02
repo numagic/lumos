@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 import numpy as np
 
-NUM_OUTPUTS = 100
+NUM_OUTPUTS = 1000
 OUTPUT_NAMES = tuple([f"dummy_{i}" for i in range(NUM_OUTPUTS)])
 OUTPUT_VALUES = np.ones(NUM_OUTPUTS)
 
