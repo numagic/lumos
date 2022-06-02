@@ -18,6 +18,14 @@ from lumos.optimal_control.nlp import CasConstraints, JaxConstraints
 logger = logging.getLogger(__name__)
 
 
+# Convert from arrays to dictionary
+def _array_to_dict(names, values):
+    # We could do dict(zip(names, values)), but unfortunately this does NOT work
+    # for casadi as casadi matrices are designed to be non-iterable
+    # see: https://github.com/casadi/casadi/issues/2278
+    return {name: values[idx] for idx, name in enumerate(names)}
+
+
 ModelIO = namedtuple("BaseIO", ("inputs", "outputs", "residuals"))
 StateSpaceIO = namedtuple(
     "StateSpaceIO",
@@ -130,6 +138,10 @@ class Model(CompositeModel):
         self.set_recursive_params(params)
         return self.forward(inputs)
 
+    def apply_and_forward_with_arrays(self, inputs, params):
+        self.set_recursive_params(params)
+        return self.forward_with_array(inputs)
+
     def _collect_children_outputs(self):
         children_outputs = []
         if not self.is_leaf():
@@ -198,6 +210,18 @@ class Model(CompositeModel):
     def get_output(self, outputs: lnp.ndarray, name: str) -> float:
         return outputs[self.get_var_index(group="outputs", name=name)]
 
+    def forward_with_arrays(self, inputs):
+        inputs = _array_to_dict(self.names.inputs, inputs)
+        model_return = self.forward(inputs)
+
+        # Convert from dictionary to arrays for the outputs
+        kwargs = {
+            g: self.make_vector(g, **getattr(model_return, g))
+            for g in model_return._fields
+        }
+
+        return ModelReturn(**kwargs)
+
     @property
     def num_inputs(self):
         return self.get_num_vars(group="inputs")
@@ -226,9 +250,7 @@ class Model(CompositeModel):
         """
         return np.abs(np.random.randn(self.get_num_vars(group=group)))
 
-    def make_vector(self, group: str, **kwargs) -> lnp.ndarray:
-        """Create a state vector from kwargs. All values must be provided."""
-
+    def _check_keys(self, group, kwargs):
         # check missing names
         input_set = set(kwargs.keys())
         expected_set = set(self.get_group_names(group))
@@ -243,7 +265,20 @@ class Model(CompositeModel):
                     f"Missing {group} values for {expected_set - input_set}"
                 )
 
+    def make_vector(self, group: str, **kwargs) -> lnp.ndarray:
+        """Create a state vector from kwargs. All values must be provided."""
+        self._check_keys(group, kwargs)
         return lnp.array(list(kwargs[name] for name in self.get_group_names(group)))
+
+    def make_dict(self, group: str, **kwargs) -> lnp.ndarray:
+        """Create a dictionary from kwargs. All values must be provided.
+        
+        This is actually just a thing wrapper on the standard dictionary construction,
+        but it additionally checks if all the necessary keys exist.
+        
+        """
+        self._check_keys(group, kwargs)
+        return kwargs
 
     def plot(self, *args, **kwargs):
         raise NotImplementedError
@@ -285,6 +320,10 @@ class StateSpaceModel(Model):
         pass
 
     def apply_and_forward(self, states, inputs, mesh, params):
+        self.set_recursive_params(params)
+        return self.forward(states, inputs, mesh)
+
+    def apply_and_forward_with_arrays(self, states, inputs, mesh, params):
         self.set_recursive_params(params)
         return self.forward_with_arrays(states, inputs, mesh)
 
@@ -330,13 +369,6 @@ class StateSpaceModel(Model):
         return states[self.get_var_index(group="states", name=name)]
 
     def forward_with_arrays(self, states, inputs, mesh):
-
-        # Convert from arrays to dictionary
-        def _array_to_dict(names, values):
-            # We could do dict(zip(names, values)), but unfortunately this does NOT work
-            # for casadi as casadi matrices are designed to be non-iterable
-            # see: https://github.com/casadi/casadi/issues/2278
-            return {name: values[idx] for idx, name in enumerate(names)}
 
         states = _array_to_dict(self.names.states, states)
         inputs = _array_to_dict(self.names.inputs, inputs)
@@ -547,7 +579,7 @@ class StateSpaceModel(Model):
 
         # FIXME: handle batched_forward better
         self._batched_forward = lnp.use_backend("jax")(
-            jit(vmap(self.apply_and_forward, in_axes=[0, 0, 0, None]))
+            jit(vmap(self.apply_and_forward_with_arrays, in_axes=[0, 0, 0, None]))
         )
 
     def _make_custom_model_algebra_cons(self):
@@ -589,7 +621,9 @@ class StateSpaceModel(Model):
 
         # Only the model calls need to go inside the context manager.
         with lnp.use_backend("casadi"):
-            model_return = self.apply_and_forward(states, inputs, mesh, cas_dict_params)
+            model_return = self.apply_and_forward_with_arrays(
+                states, inputs, mesh, cas_dict_params
+            )
             res = self._apply_and_flat_implicit(stage_vars, mesh, cas_dict_params)
             lagrange = lnp.dot(mult, res)
 

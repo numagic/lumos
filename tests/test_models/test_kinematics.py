@@ -22,13 +22,12 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
         num_steps: int = 20,
     ):
 
-        model = TrackPosition2D()
-        init_states = model.make_vector(group="states", n=0.0, time=0.0, eta=0.0)
+        init_states = self.model.make_dict(group="states", n=0.0, time=0.0, eta=0.0)
         states = init_states
         for step in range(num_steps):
 
             track_heading = start_heading + step * distance_step * curvature
-            inputs = model.make_vector(
+            inputs = self.model.make_dict(
                 group="inputs",
                 vx=speed,
                 vy=0.0,
@@ -36,13 +35,14 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
                 track_curvature=curvature,
                 track_heading=track_heading,
             )
-            model_return = model.forward(states=states, inputs=inputs)
+            model_return = self.model.forward(states=states, inputs=inputs)
 
-            states += model_return.states_dot * distance_step
+            for k in states:
+                states[k] += model_return.states_dot[k + "_dot"] * distance_step
 
         # Call the model again on the final states to ensure the outputs and states are
         # sync'd
-        inputs = model.make_vector(
+        inputs = self.model.make_dict(
             group="inputs",
             vx=speed,
             vy=0.0,
@@ -51,9 +51,9 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
             track_heading=start_heading + num_steps * distance_step * curvature,
         )
 
-        model_return = model.forward(states=states, inputs=inputs)
+        model_return = self.model.forward(states=states, inputs=inputs)
 
-        return model, states, model_return.outputs
+        return states, model_return.outputs
 
     def test_drive_straight_on_straight_track(self):
         """WHEN speed is in x-direction on a straightline track
@@ -63,7 +63,7 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
         speed = 5.0
         num_steps = 20
         distance_step = 0.1
-        model, final_states, final_outputs = self._build_track_and_drive(
+        final_states, final_outputs = self._build_track_and_drive(
             curvature=0.0,
             start_heading=0.0,
             speed=speed,
@@ -72,11 +72,9 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
         )
 
         # 0-distance to centerline
-        self.assertAlmostEqual(model.get_state(final_states, "n"), 0)
+        self.assertAlmostEqual(final_states["n"], 0)
         # distance travelled is correct
-        self.assertAlmostEqual(
-            model.get_state(final_states, "time"), num_steps * distance_step / speed
-        )
+        self.assertAlmostEqual(final_states["time"], num_steps * distance_step / speed)
 
     def test_drive_curve_on_straight_track(self):
         """WHEN speed is in x-direction on a straightline track
@@ -93,7 +91,7 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
         yaw_rate = np.deg2rad(10)
         num_steps = 20
         distance_step = 0.1
-        model, final_states, final_outputs = self._build_track_and_drive(
+        final_states, final_outputs = self._build_track_and_drive(
             curvature=0.0,
             start_heading=0.0,
             speed=speed,
@@ -103,16 +101,14 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
         )
         # centerline distance greater than 0
         # TODO: assert greater than 0 isn't that of a great test... Can we be more precise?)
-        self.assertGreater(model.get_state(final_states, "n"), 0)
+        self.assertGreater(final_states["n"], 0)
 
         # time spent would be larger than if driving on straightl line
-        self.assertGreater(
-            model.get_state(final_states, "time"), num_steps * distance_step / speed
-        )
+        self.assertGreater(final_states["time"], num_steps * distance_step / speed)
 
         # assert heading is correct
         self.assertAlmostEqual(
-            model.get_output(final_outputs, "yaw_angle"),
+            final_outputs["yaw_angle"],
             num_steps * distance_step / speed * yaw_rate,
             places=3,
         )
@@ -133,7 +129,7 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
         curvature = yaw_rate / speed
         num_steps = 20
         distance_step = 0.1
-        model, final_states, final_outputs = self._build_track_and_drive(
+        final_states, final_outputs = self._build_track_and_drive(
             curvature=curvature,
             start_heading=0.0,
             speed=speed,
@@ -143,15 +139,13 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
         )
 
         # We should stay on centerline
-        self.assertAlmostEqual(model.get_state(final_states, "n"), 0)
+        self.assertAlmostEqual(final_states["n"], 0)
 
         # time spent would be the same as driving on straightl line
-        self.assertAlmostEqual(
-            model.get_state(final_states, "time"), num_steps * distance_step / speed
-        )
+        self.assertAlmostEqual(final_states["time"], num_steps * distance_step / speed)
 
         # assert heading should be the same as track heading
-        self.assertAlmostEqual(model.get_state(final_states, "eta"), 0)
+        self.assertAlmostEqual(final_states["eta"], 0)
 
 
 if __name__ == "__name__":

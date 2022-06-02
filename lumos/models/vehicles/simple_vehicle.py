@@ -87,16 +87,6 @@ def _rotate_z(theta: float) -> lnp.ndarray:
         "slip_angle_rl",
         "slip_angle_rr",
     ),
-    con_outputs=(
-        "slip_ratio_fl",
-        "slip_ratio_fr",
-        "slip_ratio_rl",
-        "slip_ratio_rr",
-        "slip_angle_fl",
-        "slip_angle_fr",
-        "slip_angle_rl",
-        "slip_angle_rr",
-    ),
     residuals=("ax", "ay",),
 )
 class SimpleVehicle(StateSpaceModel):
@@ -389,7 +379,7 @@ class SimpleVehicle(StateSpaceModel):
         outputs.update(submodel_outputs)
 
         residuals = dict(ax=ax - ax_in, ay=ay - ay_in)
-        return self.make_state_space_model_return(
+        return StateSpaceModelReturn(
             states_dot=states_dot, outputs=outputs, residuals=residuals,
         )
 

@@ -42,29 +42,23 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
         model_return = self.model.forward(init_states, inputs)
 
         # Rear wheel should accelerate
-        self.assertGreater(model_return.states_dot["wheel_speed_rl"], 0)
-        self.assertGreater(model_return.states_dot["wheel_speed_rr"], 0)
+        self.assertGreater(model_return.states_dot["wheel_speed_rl_dot"], 0)
+        self.assertGreater(model_return.states_dot["wheel_speed_rr_dot"], 0)
 
         # After a few timesteps, the vehicle should be faster and still driving straight
         num_steps = 21
         time_step = 0.05
 
         # Careful, numpy arrays are mutable!
-        states = np.copy(init_states)
-        for _ in range(num_steps):
-            breakpoint()
-            model_return = self.model.forward(states, inputs)
-            states += model_return.states_dot * time_step
+        states, outputs = self._forward_euler(init_states, inputs, time_step, num_steps)
 
         # Speed should have increased
         # TODO: should we put a threshold on 'sufficient increase'?
-        self.assertGreater(
-            self.model.get_state(states, "vx"), self.model.get_state(init_states, "vx")
-        )
+        self.assertGreater(states["vx"], init_states["vx"])
 
         # lateral speed and yaw rate should stay at 0
-        self.assertAlmostEqual(self.model.get_state(states, "vy"), 0)
-        self.assertAlmostEqual(self.model.get_state(states, "yaw_rate"), 0)
+        self.assertAlmostEqual(states["vy"], 0)
+        self.assertAlmostEqual(states["yaw_rate"], 0)
 
     def test_brake_straight(self):
         init_states = self._get_initial_states()
@@ -74,29 +68,21 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
 
         # All wheels should decelerate
         for c in ("fl", "fr", "rl", "rr"):
-            self.assertLess(
-                self.model.get_state(model_return.states_dot, f"wheel_speed_{c}"), 0
-            )
+            self.assertLess(model_return.states_dot[f"wheel_speed_{c}_dot"], 0)
 
         # After a few timesteps, the vehicle should be slower and still driving straight
         num_steps = 21
         time_step = 0.05
 
-        # Careful, numpy arrays are mutable!
-        states = np.copy(init_states)
-        for _ in range(num_steps):
-            model_return = self.model.forward(states, inputs)
-            states += model_return.states_dot * time_step
+        states, outputs = self._forward_euler(init_states, inputs, time_step, num_steps)
 
         # Speed should have increased
         # TODO: should we put a threshold on 'sufficient increase'?
-        self.assertLess(
-            self.model.get_state(states, "vx"), self.model.get_state(init_states, "vx")
-        )
+        self.assertLess(states["vx"], init_states["vx"])
 
         # lateral speed and yaw rate should stay at 0
-        self.assertAlmostEqual(self.model.get_state(states, "vy"), 0)
-        self.assertAlmostEqual(self.model.get_state(states, "yaw_rate"), 0)
+        self.assertAlmostEqual(states["vy"], 0)
+        self.assertAlmostEqual(states["yaw_rate"], 0)
 
     def test_turn_left(self):
         init_states = self._get_initial_states()
@@ -105,9 +91,9 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
         model_return = self.model.forward(init_states, inputs)
 
         # should directly get +ve lateral acceleration, +ve yaw acceleration and derivative of vy
-        self.assertGreater(self.model.get_state(model_return.states_dot, "vy"), 0)
-        self.assertGreater(self.model.get_state(model_return.states_dot, "yaw_rate"), 0)
-        self.assertGreater(self.model.get_output(model_return.outputs, "ay"), 0)
+        self.assertGreater(model_return.states_dot["vy_dot"], 0)
+        self.assertGreater(model_return.states_dot["yaw_rate_dot"], 0)
+        self.assertGreater(model_return.outputs["ay"], 0)
 
         # After a few timesteps:
         # The speed should decelerate due to cornering resistance
@@ -117,17 +103,11 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
         num_steps = 21
         time_step = 0.05
 
-        # Careful, numpy arrays are mutable!
-        states = np.copy(init_states)
-        for _ in range(num_steps):
-            model_return = self.model.forward(states, inputs)
-            states += model_return.states_dot * time_step
+        states, outputs = self._forward_euler(init_states, inputs, time_step, num_steps)
 
-        self.assertLess(
-            self.model.get_state(states, "vx"), self.model.get_state(init_states, "vx")
-        )
-        self.assertLess(self.model.get_state(states, "vy"), 0)
-        self.assertGreater(self.model.get_state(states, "yaw_rate"), 0)
+        self.assertLess(states["vx"], init_states["vx"])
+        self.assertLess(states["vy"], 0)
+        self.assertGreater(states["yaw_rate"], 0)
 
         # TODO: we could also check that the vehicle gets into kind of a steady-state turn
 
@@ -138,48 +118,42 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
         model_return = self.model.forward(init_states, inputs)
 
         # should directly get +ve lateral acceleration, +ve yaw acceleration and derivative of vy
-        self.assertLess(self.model.get_state(model_return.states_dot, "vy"), 0)
-        self.assertLess(self.model.get_state(model_return.states_dot, "yaw_rate"), 0)
-        self.assertLess(self.model.get_output(model_return.outputs, "ay"), 0)
+        self.assertLess(model_return.states_dot["vy_dot"], 0)
+        self.assertLess(model_return.states_dot["yaw_rate_dot"], 0)
+        self.assertLess(model_return.outputs["ay"], 0)
 
         num_steps = 21
         time_step = 0.05
 
-        # Careful, numpy arrays are mutable!
-        states = np.copy(init_states)
-        for _ in range(num_steps):
-            model_return = self.model.forward(states, inputs)
-            states += model_return.states_dot * time_step
+        states, outputs = self._forward_euler(init_states, inputs, time_step, num_steps)
 
         # All the other assertions change sign compared to left turn, except for this one
-        self.assertLess(
-            self.model.get_state(states, "vx"), self.model.get_state(init_states, "vx")
-        )
-        self.assertGreater(self.model.get_state(states, "vy"), 0)
-        self.assertLess(self.model.get_state(states, "yaw_rate"), 0)
+        self.assertLess(states["vx"], init_states["vx"])
+        self.assertGreater(states["vy"], 0)
+        self.assertLess(states["yaw_rate"], 0)
 
     def test_delta_torque(self):
         """When there is a delta speed
         There is a delta torque of the opposite sign.
         """
 
-        # Use an np array as states because we want it mutable
-        states = np.array(self._get_initial_states())
-        wheel_speed_rr = self.model.get_state(states, "wheel_speed_rr")
+        states = self._get_initial_states()
+        wheel_speed_rr = states["wheel_speed_rr"]
 
         for delta_speed in [-1.0, 1.0]:
             wheel_speed_rl = wheel_speed_rr + delta_speed
 
-            states[
-                self.model.get_var_index("states", "wheel_speed_rl")
-            ] = wheel_speed_rl
+            states["wheel_speed_rl"] = wheel_speed_rl
 
-            inputs = dict(throttle=0.3, brake=0, steer=0.0, ax=0, ay=0)
+            inputs = self.model.make_dict(
+                "inputs", throttle=0.3, brake=0, steer=0.0, ax=0, ay=0
+            )
 
             model_return = self.model.forward(states, inputs)
-            delta_torque = self.model.get_output(
-                model_return.outputs, "drive_torque_rl"
-            ) - self.model.get_output(model_return.outputs, "drive_torque_rr")
+            delta_torque = (
+                model_return.outputs["drive_torque_rl"]
+                - model_return.outputs["drive_torque_rr"]
+            )
 
             # delta speed and torque should be opposite signs
             self.assertLess(delta_speed * delta_torque, 0.0)

@@ -1,7 +1,5 @@
-from abc import abstractmethod
 import numpy as np
 
-import lumos.numpy as lnp
 from lumos.models.ml import gp, mlp
 from lumos.models.base import model_io, Model, ModelReturn
 
@@ -31,6 +29,7 @@ class GPAero(AeroModel):
     # FIXME: we should pass these as configuration parameters for the model instance.
     num_points = 1024
 
+    @classmethod
     def get_default_params(cls):
         # NOTE: we don't use the property methods here because special care is needed to
         # use property method inside a class method
@@ -40,17 +39,22 @@ class GPAero(AeroModel):
         # we might want to make the I/O names dynamic that are only defined after the
         # object is instantiated (for example, passing all submodel outputs as a part of
         # parent model outputs)
-        num_inputs = len(cls.get_group_names("inputs"))
-        num_outputs = len(cls.get_group_names("outputs"))
+        num_inputs = len(cls.get_cls_group_names("inputs"))
+        num_outputs = len(cls.get_cls_group_names("outputs"))
         return {
             "gp_points": np.random.randn(cls.num_points, num_inputs),
             "alpha": np.random.randn(num_outputs, cls.num_points),
         }
 
     def forward(self, inputs):
-        coeff = gp(inputs, self._params["gp_points"], self._params["alpha"])
+        array_inputs = self.make_vector("inputs", **inputs)
+        coeff = gp(array_inputs, self._params["gp_points"], self._params["alpha"])
 
-        return ModelReturn(outputs=coeff)
+        outputs = self.make_dict(
+            "outputs", **{n: coeff[idx] for idx, n in enumerate(self.names.outputs)}
+        )
+
+        return ModelReturn(outputs=outputs)
 
 
 class MLPAero(AeroModel):
@@ -71,8 +75,8 @@ class MLPAero(AeroModel):
 
     @classmethod
     def get_default_params(cls):
-        num_inputs = len(cls.get_group_names("inputs"))
-        num_outputs = len(cls.get_group_names("outputs"))
+        num_inputs = len(cls.get_cls_group_names("inputs"))
+        num_outputs = len(cls.get_cls_group_names("outputs"))
 
         layers_dim = [cls.layer_dim] * cls.num_layers
         ins = [num_inputs] + layers_dim[:-1]
@@ -98,6 +102,10 @@ class MLPAero(AeroModel):
         #
         # MLP params are at least 3 dimensional, we could do list of weights (if weights)
         # are 2d only, but that breaks the flat dict requirement on values.
-        return ModelReturn(
-            outputs=mlp(inputs, weights=self._dict_to_list(self._params))
+        array_inputs = self.make_vector("inputs", **inputs)
+
+        coeff = mlp(array_inputs, weights=self._dict_to_list(self._params))
+        outputs = self.make_dict(
+            "outputs", **{n: coeff[idx] for idx, n in enumerate(self.names.outputs)}
         )
+        return ModelReturn(outputs=outputs)

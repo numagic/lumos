@@ -75,7 +75,7 @@ class BaseModelTest:
         cls.params = cls.model.get_recursive_params()
 
         cls.args_dict = {
-            g: {n: 1.0 for n in cls.model.get_group_names(g)}
+            g: {n: 0.1 for n in cls.model.get_group_names(g)}
             for g in cls.forward_arguments
         }
 
@@ -92,11 +92,14 @@ class BaseModelTest:
         # return float, but that's not what we need. We want to make sure t works with
         # Casadi symbolic variables. (But maybe if the test works with float, then it
         # will work with symbolic variables as well?)
+        def _nested_dict_to_mx(d):
+            if isinstance(d, dict):
+                return {k: _nested_dict_to_mx(v) for k, v in d.items()}
+            else:
+                return MX(d)
+
         if lnp.get_backend() == "casadi":
-            args_dict = {
-                g: {name: MX(value) for name, value in d.items()}
-                for g, d in self.args_dict.items()
-            }
+            args_dict = _nested_dict_to_mx(self.args_dict)
         else:
             args_dict = self.args_dict
 
@@ -125,7 +128,8 @@ class BaseModelTest:
     def test_code_generation(self):
         # Code generation requires using the array inputs interface
         args_dict = {
-            k: MX.sym(k, self.model.get_num_vars(k)) for k, v in self.args_dict.items()
+            k: MX.sym("mesh") if k == "mesh" else MX.sym(k, self.model.get_num_vars(k))
+            for k, v in self.args_dict.items()
         }
 
         # TODO: need to add parameter to the function
@@ -137,7 +141,8 @@ class BaseModelTest:
 
         # call the function with concrete values
         args_dict = {
-            k: self.model.make_vector(k, **v) for k, v in self.args_dict.items()
+            k: v if k == "mesh" else self.model.make_vector(k, **v)
+            for k, v in self.args_dict.items()
         }
         _ = f.call(list(args_dict.values()))
 
@@ -163,6 +168,18 @@ class BaseModelTest:
 class BaseStateSpaceModelTest(BaseModelTest):
     forward_arguments: List[str] = ["inputs", "states"]
     need_mesh_input = True
+
+    def _forward_euler(self, init_states, inputs, time_step, num_steps):
+        """Helper to run forward euler with a fixed inputs for a few steps"""
+
+        # Ensure we don't modify the initial states
+        states = dict(init_states)
+        for _ in range(num_steps):
+            model_return = self.model.forward(states, inputs)
+            for k in states:
+                states[k] += model_return.states_dot[k + "_dot"] * time_step
+
+        return states, model_return.outputs
 
 
 if __name__ == "__name__":

@@ -15,8 +15,8 @@ from lumos.models.drone_model import DroneModel
 )
 class ModelWithWrongConOutputs(StateSpaceModel):
     def forward(self, states, inputs, mesh=0.0):
-        states_dot = self.make_vector(group="states", state0=0.0, state1=0.1)
-        outputs = self.make_vector(group="outputs", output0=0.0, output1=1.0)
+        states_dot = self.make_dict(group="states", state0=0.0, state1=0.1)
+        outputs = self.make_dict(group="outputs", output0=0.0, output1=1.0)
 
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs,
@@ -45,7 +45,7 @@ class ModelWithNoConOutputs(ModelWithCorrectConOutputs):
 )
 class ModelWithNoOutputs(StateSpaceModel):
     def forward(self, states, inputs, mesh=0.0):
-        states_dot = self.make_vector(group="states", state0=0.0, state1=0.1)
+        states_dot = self.make_dict(group="states", state0=0.0, state1=0.1)
 
         return self.make_state_space_model_return(states_dot=states_dot,)
 
@@ -133,13 +133,8 @@ class TestStateSpaceModel(unittest.TestCase):
         inputs = np.zeros(model_correct.num_inputs)
         model_return = model_correct.forward(states, inputs)
 
-        manually_extracted = np.array(
-            [
-                model_correct.get_output(model_return.outputs, n)
-                for n in model_correct.get_group_names("con_outputs")
-            ]
-        )
-        np.testing.assert_allclose(model_return.con_outputs, manually_extracted)
+        for k, v in model_return.con_outputs.items():
+            self.assertAlmostEqual(v, model_return.outputs[k])
 
         # When conoutputs are empty
         model_no_cons = ModelWithNoConOutputs()
