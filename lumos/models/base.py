@@ -108,6 +108,15 @@ class Model(CompositeModel):
     ):
         super().__init__(model_config=model_config, params=params)
 
+        # automatically collect children outputs and add them to the parent outputs with
+        # structure
+        children_outputs = tuple(self._collect_children_outputs())
+
+        # HACK: namedtuples are immutable
+        self.names = self.names._replace(outputs=self.names.outputs + children_outputs)
+
+        pass
+
     @abstractmethod
     def forward(self, *args, **kwargs):
         """Abstract method for calling the model.
@@ -121,27 +130,36 @@ class Model(CompositeModel):
         self.set_recursive_params(params)
         return self.forward(inputs)
 
-    def forward_with_arrays(self, inputs):
+    def _collect_children_outputs(self):
+        children_outputs = []
+        if not self.is_leaf():
+            for submodel_name, model in self._submodels.items():
+                children_outputs += [
+                    submodel_name + "." + n for n in model.names.outputs
+                ]
 
-        # Convert from arrays to dictionary
-        def _array_to_dict(names, values):
-            # We could do dict(zip(names, values)), but unfortunately this does NOT work
-            # for casadi as casadi matrices are designed to be non-iterable
-            # see: https://github.com/casadi/casadi/issues/2278
-            return {name: values[idx] for idx, name in enumerate(names)}
+        return children_outputs
 
-        inputs = _array_to_dict(self.names.inputs, inputs)
-        model_return = self.forward(inputs)
+    def combine_submodel_outputs(self, **kwargs):
+        """combine the outputs from submodels into large dictionary
+        
+        kwargs: {name_of_submodel: vector_of_outputs}
+        """
+        combined_dict = {}
+        for submodel_name, submodel_outputs in kwargs.items():
+            # TODO: maybe we could convert the following to a helper method?
+            combined_dict.update(
+                {submodel_name + "." + n: v for n, v in submodel_outputs.items()}
+            )
 
-        # Convert from dictionary to arrays for the outputs
-        kwargs = {
-            g: self.make_vector(g, **getattr(model_return, g))
-            for g in model_return._fields
-        }
-
-        return ModelReturn(**kwargs)
+        return combined_dict
 
     @classmethod
+    def get_cls_group_names(cls, group: str) -> Tuple[str, ...]:
+        """Return the names of variables inside an IO group."""
+
+        return getattr(cls.names, group)
+
     def get_group_names(self, group: str) -> Tuple[str, ...]:
         """Return the names of variables inside an IO group."""
 

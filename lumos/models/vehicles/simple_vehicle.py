@@ -282,6 +282,7 @@ class SimpleVehicle(StateSpaceModel):
         mirror_coeff = {"fl": 1.0, "fr": -1.0, "rl": 1.0, "rr": -1.0}
         tire_force_in_wheel_coordinate = {}
         slips = {}
+        tire_outputs = {}
         for c, vel in corner_vel_in_wheel_coordinate.items():
             kappa = -(1 - rolling_radius * wheel_speed[c] / vx)
             # NOTE: this assumes vx > 0
@@ -299,6 +300,9 @@ class SimpleVehicle(StateSpaceModel):
             )
 
             outputs = self.get_submodel("tire_" + c).forward(inputs).outputs
+
+            # TODO: store the outputs, but in a nicer way.
+            tire_outputs[c] = outputs
             # TODO: tire moments are not taken into account yet.
             tire_force_in_wheel_coordinate[c] = lnp.array(
                 [outputs["Fx"], outputs["Fy"] * mirror_coeff[c], wheel_load[c],]
@@ -354,6 +358,14 @@ class SimpleVehicle(StateSpaceModel):
             wheel_speed_rr_dot=wheel_speed_dot["rr"],
         )
 
+        submodel_outputs = self.combine_submodel_outputs(
+            aero=aero_return.outputs,
+            tire_fl=tire_outputs["fl"],
+            tire_fr=tire_outputs["fr"],
+            tire_rl=tire_outputs["rl"],
+            tire_rr=tire_outputs["rr"],
+        )
+
         outputs = dict(
             ax=ax,
             ay=ay,
@@ -373,6 +385,8 @@ class SimpleVehicle(StateSpaceModel):
             Fz_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.Z],
             **slips,
         )
+
+        outputs.update(submodel_outputs)
 
         residuals = dict(ax=ax - ax_in, ay=ay - ay_in)
         return self.make_state_space_model_return(
