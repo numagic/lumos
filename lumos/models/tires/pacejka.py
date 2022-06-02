@@ -7,12 +7,6 @@ from lumos.models.tires.base import BaseTire
 
 logger = logging.getLogger(__name__)
 
-import numpy as np
-
-NUM_OUTPUTS = 1000
-OUTPUT_NAMES = tuple([f"dummy_{i}" for i in range(NUM_OUTPUTS)])
-OUTPUT_VALUES = np.ones(NUM_OUTPUTS)
-
 
 @model_io(
     inputs=(
@@ -22,8 +16,7 @@ OUTPUT_VALUES = np.ones(NUM_OUTPUTS)
         "vx",  # x-velocity in tire coordinate
         "gamma",  # inclination angle
     ),
-    outputs=("Fx", "Fy", "Mx", "My", "Mz", "Kxk", "Gxa", "Kya", "Gyk", "GSum")
-    + OUTPUT_NAMES,
+    outputs=("Fx", "Fy", "Mx", "My", "Mz", "Kxk", "Gxa", "Kya", "Gyk", "GSum"),
 )
 class MF52(BaseTire):
     def __init__(
@@ -269,8 +262,6 @@ class MF52(BaseTire):
             Gyk=Gyk,
             GSum=lnp.sqrt(Gyk ** 2 + Gxa ** 2),
         )
-
-        outputs.update(dict(zip(OUTPUT_NAMES, OUTPUT_VALUES)))
 
         return ModelReturn(outputs=outputs)
 
