@@ -38,7 +38,7 @@ class TestTrackPosition2D(BaseStateSpaceModelTest, unittest.TestCase):
             model_return = self.model.forward(states=states, inputs=inputs)
 
             for k in states:
-                states[k] += model_return.states_dot[k + "_dot"] * distance_step
+                states[k] += model_return.states_dot[k] * distance_step
 
         # Call the model again on the final states to ensure the outputs and states are
         # sync'd

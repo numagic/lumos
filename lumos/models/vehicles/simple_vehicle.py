@@ -338,14 +338,15 @@ class SimpleVehicle(StateSpaceModel):
         vx_dot = ax + yaw_rate * vy
         vy_dot = ay - yaw_rate * vx
 
-        states_dot = dict(
-            vx_dot=vx_dot,
-            vy_dot=vy_dot,
-            yaw_rate_dot=yaw_accel,
-            wheel_speed_fl_dot=wheel_speed_dot["fl"],
-            wheel_speed_fr_dot=wheel_speed_dot["fr"],
-            wheel_speed_rl_dot=wheel_speed_dot["rl"],
-            wheel_speed_rr_dot=wheel_speed_dot["rr"],
+        states_dot = self.make_dict(
+            "states_dot",
+            vx=vx_dot,
+            vy=vy_dot,
+            yaw_rate=yaw_accel,
+            wheel_speed_fl=wheel_speed_dot["fl"],
+            wheel_speed_fr=wheel_speed_dot["fr"],
+            wheel_speed_rl=wheel_speed_dot["rl"],
+            wheel_speed_rr=wheel_speed_dot["rr"],
         )
 
         submodel_outputs = self.combine_submodel_outputs(
@@ -356,7 +357,8 @@ class SimpleVehicle(StateSpaceModel):
             tire_rr=tire_outputs["rr"],
         )
 
-        outputs = dict(
+        outputs = self.make_dict(
+            "outputs",
             ax=ax,
             ay=ay,
             drive_torque_rl=drive_torque_rl,
@@ -374,9 +376,8 @@ class SimpleVehicle(StateSpaceModel):
             Fy_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.Y],
             Fz_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.Z],
             **slips,
+            **submodel_outputs,
         )
-
-        outputs.update(submodel_outputs)
 
         residuals = dict(ax=ax - ax_in, ay=ay - ay_in)
         return StateSpaceModelReturn(

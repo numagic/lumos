@@ -42,8 +42,8 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
         model_return = self.model.forward(init_states, inputs)
 
         # Rear wheel should accelerate
-        self.assertGreater(model_return.states_dot["wheel_speed_rl_dot"], 0)
-        self.assertGreater(model_return.states_dot["wheel_speed_rr_dot"], 0)
+        self.assertGreater(model_return.states_dot["wheel_speed_rl"], 0)
+        self.assertGreater(model_return.states_dot["wheel_speed_rr"], 0)
 
         # After a few timesteps, the vehicle should be faster and still driving straight
         num_steps = 21
@@ -68,7 +68,7 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
 
         # All wheels should decelerate
         for c in ("fl", "fr", "rl", "rr"):
-            self.assertLess(model_return.states_dot[f"wheel_speed_{c}_dot"], 0)
+            self.assertLess(model_return.states_dot[f"wheel_speed_{c}"], 0)
 
         # After a few timesteps, the vehicle should be slower and still driving straight
         num_steps = 21
@@ -91,8 +91,8 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
         model_return = self.model.forward(init_states, inputs)
 
         # should directly get +ve lateral acceleration, +ve yaw acceleration and derivative of vy
-        self.assertGreater(model_return.states_dot["vy_dot"], 0)
-        self.assertGreater(model_return.states_dot["yaw_rate_dot"], 0)
+        self.assertGreater(model_return.states_dot["vy"], 0)
+        self.assertGreater(model_return.states_dot["yaw_rate"], 0)
         self.assertGreater(model_return.outputs["ay"], 0)
 
         # After a few timesteps:
@@ -118,8 +118,8 @@ class TestSimpleVehicle(BaseStateSpaceModelTest, unittest.TestCase):
         model_return = self.model.forward(init_states, inputs)
 
         # should directly get +ve lateral acceleration, +ve yaw acceleration and derivative of vy
-        self.assertLess(model_return.states_dot["vy_dot"], 0)
-        self.assertLess(model_return.states_dot["yaw_rate_dot"], 0)
+        self.assertLess(model_return.states_dot["vy"], 0)
+        self.assertLess(model_return.states_dot["yaw_rate"], 0)
         self.assertLess(model_return.outputs["ay"], 0)
 
         num_steps = 21

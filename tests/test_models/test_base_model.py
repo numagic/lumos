@@ -204,7 +204,7 @@ class TestVehicle(StateSpaceModel):
 
         # Make some dummy outputs
         outputs = self.make_dict("outputs", ax=AX, ay=AY, **submodel_outputs)
-        states_dot = self.make_dict("states_dot", vx_dot=0.1, vy_dot=0.2)
+        states_dot = self.make_dict("states_dot", vx=0.1, vy=0.2)
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs
         )
@@ -227,7 +227,7 @@ class HybridPowertrain(StateSpaceModel):
         engine_ratio = 0.8
 
         # Assemble states_dot vector with dummy values
-        states_dot = self.make_dict("states_dot", engine_speed_dot=-25.0)
+        states_dot = self.make_dict("states_dot", engine_speed=-25.0)
 
         # Call engine
         engine_model = self.get_submodel("engine")

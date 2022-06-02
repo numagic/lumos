@@ -98,7 +98,7 @@ class SimpleVehicleOnTrack(StateSpaceModel):
         # ordering when the are created
 
         # Convert to distance domain derivatives
-        dt_ds = kinematics_return.states_dot["time_dot"]
+        dt_ds = kinematics_return.states_dot["time"]
         states_dot = {
             **kinematics_return.states_dot,
             **{k: v * dt_ds for k, v in vehicle_return.states_dot.items()},

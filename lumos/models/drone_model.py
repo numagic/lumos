@@ -1,4 +1,5 @@
 import logging
+from re import X
 
 from typing import Any, Dict
 
@@ -32,15 +33,18 @@ class DroneModel(StateSpaceModel):
         z_dot_dot = inputs["f"] * lnp.cos(theta) - params["gravity"]
 
         # Assemble result
-        states_dot = dict(
-            x_dot=states["x_dot"],
-            x_dot_dot=x_dot_dot,
-            z_dot=states["z_dot"],
-            z_dot_dot=z_dot_dot,
-            theta_dot=inputs["omega"],
+        states_dot = self.make_dict(
+            "states_dot",
+            x=states["x_dot"],
+            x_dot=x_dot_dot,
+            z=states["z_dot"],
+            z_dot=z_dot_dot,
+            theta=inputs["omega"],
         )
 
-        outputs = dict(sin_theta=lnp.sin(theta), f_omega=inputs["omega"] * inputs["f"],)
+        outputs = self.make_dict(
+            "outputs", sin_theta=lnp.sin(theta), f_omega=inputs["omega"] * inputs["f"],
+        )
 
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs,

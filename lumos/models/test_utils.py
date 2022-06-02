@@ -177,7 +177,7 @@ class BaseStateSpaceModelTest(BaseModelTest):
         for _ in range(num_steps):
             model_return = self.model.forward(states, inputs)
             for k in states:
-                states[k] += model_return.states_dot[k + "_dot"] * time_step
+                states[k] += model_return.states_dot[k] * time_step
 
         return states, model_return.outputs
 

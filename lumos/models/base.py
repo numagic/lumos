@@ -64,10 +64,9 @@ def state_space_io(
                 "StateSpaceModel. Use model_io for other models"
             )
 
-        states_dot = tuple([n + "_dot" for n in states])
         cls.names = StateSpaceIO(
             states=states,
-            states_dot=states_dot,
+            states_dot=states,
             inputs=inputs,
             outputs=outputs,
             con_outputs=con_outputs,

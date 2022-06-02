@@ -72,9 +72,7 @@ class TimeModel(StateSpaceModel):
         dy_dt = lnp.sin(theta) * v
 
         # Assemble result
-        states_dot = self.make_dict(
-            group="states_dot", v_dot=v_dot, x_dot=dx_dt, y_dot=dy_dt,
-        )
+        states_dot = self.make_dict(group="states_dot", v=v_dot, x=dx_dt, y=dy_dt,)
         outputs = self.make_dict(group="outputs", theta=theta)
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs
@@ -256,7 +254,7 @@ class DistanceModel(StateSpaceModel):
         y_dot = lnp.tan(theta)
         # Assemble result
         states_dot = self.make_dict(
-            group="states_dot", time_dot=time_dot, v_dot=v_dot, y_dot=y_dot,
+            group="states_dot", time=time_dot, v=v_dot, y=y_dot,
         )
 
         return self.make_state_space_model_return(states_dot=states_dot)

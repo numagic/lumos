@@ -46,8 +46,8 @@ class TestSimpleVehicleOnTrack(BaseStateSpaceModelTest, unittest.TestCase):
         model_return = self.model.forward(init_states, inputs, mesh=0.0)
 
         # should directly get +ve lateral acceleration, +ve yaw acceleration and derivative of vy
-        self.assertGreater(model_return.states_dot["vy_dot"], 0)
-        self.assertGreater(model_return.states_dot["yaw_rate_dot"], 0)
+        self.assertGreater(model_return.states_dot["vy"], 0)
+        self.assertGreater(model_return.states_dot["yaw_rate"], 0)
         self.assertGreater(model_return.outputs["vehicle.ay"], 0)
 
         # After a few timesteps:

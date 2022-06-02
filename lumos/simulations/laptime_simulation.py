@@ -82,10 +82,10 @@ def get_default_scales() -> Tuple[ScaleConfig]:
         ScaleConfig("states", "wheel_speed_fr", 50.0),
         ScaleConfig("states", "wheel_speed_rl", 50.0),
         ScaleConfig("states", "wheel_speed_rr", 50.0),
-        ScaleConfig("states_dot", "wheel_speed_fl_dot", 50.0),
-        ScaleConfig("states_dot", "wheel_speed_fr_dot", 50.0),
-        ScaleConfig("states_dot", "wheel_speed_rl_dot", 50.0),
-        ScaleConfig("states_dot", "wheel_speed_rr_dot", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_fl", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_fr", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_rl", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_rr", 50.0),
     )
     return scales
 

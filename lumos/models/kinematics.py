@@ -52,10 +52,10 @@ class TrackPosition2D(StateSpaceModel):
 
         # Pure kinematics related calculation. This is where vehicle models will be
         # executed in the future
-        states_dot = dict(
-            time_dot=1 / ds_dt, n_dot=dn_dt / ds_dt, eta_dot=deta_dt / ds_dt,
+        states_dot = self.make_dict(
+            "states_dot", time=1 / ds_dt, n=dn_dt / ds_dt, eta=deta_dt / ds_dt,
         )
-        outputs = dict(yaw_angle=yaw_angle, curvature=curvature)
+        outputs = self.make_dict("outputs", yaw_angle=yaw_angle, curvature=curvature)
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs
         )
