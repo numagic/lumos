@@ -270,7 +270,7 @@ class Model(CompositeModel):
         self._check_keys(group, kwargs)
         return lnp.array(list(kwargs[name] for name in self.get_group_names(group)))
 
-    def make_dict(self, group: str, **kwargs) -> lnp.ndarray:
+    def make_dict(self, group: str, **kwargs) -> Dict[str, Any]:
         """Create a dictionary from kwargs. All values must be provided.
         
         This is actually just a thing wrapper on the standard dictionary construction,
@@ -279,6 +279,9 @@ class Model(CompositeModel):
         """
         self._check_keys(group, kwargs)
         return kwargs
+
+    def make_const_dict(self, group, value: float) -> Dict[str, Any]:
+        return {n: value for n in self.get_group_names(group)}
 
     def plot(self, *args, **kwargs):
         raise NotImplementedError
