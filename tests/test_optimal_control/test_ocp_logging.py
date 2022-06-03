@@ -83,8 +83,45 @@ class TestOCPLogging(unittest.TestCase):
         x0 = ocp.get_init_guess()
         solution, info = ocp.solve(x0, max_iter=self.num_iter, print_level=0)
 
+    @parameterized.expand([[2], [3], [10]])
+    def test_last_iter_is_logged(self, log_every_nth_iter: int):
+        """Ensure that when we log iterations, the last one is alwasy logged.
+        
+        We also test that the last iteration logged results are correct.
+        """
+        with TemporaryDirectory() as temp_dir:
+            sim_config = DroneSimulation.get_sim_config(
+                backend="casadi",
+                num_intervals=100,
+                logging_config=LoggingConfig(
+                    sim_name="temp",
+                    results_dir=temp_dir,
+                    log_every_nth_iter=log_every_nth_iter,
+                ),
+            )
+            ocp = DroneSimulation(sim_config=sim_config)
+            x0 = ocp.get_init_guess()
+            solution, info = ocp.solve(x0, max_iter=self.num_iter, print_level=0)
+
+            combined_df = pq.read_pandas(
+                os.path.join(ocp.logging_dir, "all_iters.parquet")
+            ).to_pandas()
+
+            # Check last iteration is logged
+            self.assertEqual(combined_df["iter"].max(), self.num_iter)
+
+            # Check the values are correct
+            last_iter_df = combined_df.loc[combined_df["iter"] == self.num_iter]
+            op = ocp.dec_var_operator
+            for group in ["states", "inputs", "con_outputs"]:
+                for name in ocp.model.get_group_names(group):
+                    np.testing.assert_allclose(
+                        last_iter_df[group + "." + name],
+                        op.get_var(solution, group, name),
+                    )
+
     @parameterized.expand(itertools.product(("drone", "ltc"), (True, False)))
-    def test_log_every_iter(self, drone_or_ltc, is_condensed):
+    def test_log_every_iter_logs_correctly(self, drone_or_ltc, is_condensed):
         with TemporaryDirectory() as temp_dir:
             logging_dir = self._run_and_log(
                 is_condensed=is_condensed,
