@@ -320,7 +320,9 @@ class TestLaptimeSimulationSolve(unittest.TestCase):
                 BoundaryConditionConfig(0, "states", "yaw_rate", 0.0),
                 BoundaryConditionConfig(-1, "states", "n", 0.0),
                 BoundaryConditionConfig(-1, "states", "eta", 0.0),
-                BoundaryConditionConfig(-1, "con_outputs", "slip_ratio_fl", 0.0),
+                BoundaryConditionConfig(
+                    -1, "con_outputs", "vehicle.slip_ratio_fl", 0.0
+                ),
             )
         cls.sim_config = LaptimeSimulation.get_sim_config(
             track="data/tracks/Catalunya.csv",

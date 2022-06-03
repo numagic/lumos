@@ -64,18 +64,16 @@ class TimeModel(StateSpaceModel):
         mesh: float = 0.0,  # time invariant model
     ) -> StateSpaceModelReturn:
         params = self._params
-        theta = self.get_input(inputs, "theta")
-        v = self.get_state(states, "v")
+        theta = inputs["theta"]
+        v = states["v"]
         v_dot = -params["gravity"] * lnp.sin(theta)
 
         dx_dt = lnp.cos(theta) * v
         dy_dt = lnp.sin(theta) * v
 
         # Assemble result
-        states_dot = self.make_vector(
-            group="states_dot", v_dot=v_dot, x_dot=dx_dt, y_dot=dy_dt,
-        )
-        outputs = self.make_vector(group="outputs", theta=theta)
+        states_dot = self.make_dict(group="states_dot", v=v_dot, x=dx_dt, y=dy_dt,)
+        outputs = self.make_dict(group="outputs", theta=theta)
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs
         )
@@ -244,9 +242,9 @@ class DistanceModel(StateSpaceModel):
         mesh: float = 0.0,  # time invariant model
     ) -> StateSpaceModelReturn:
         params = self._params
-        theta = self.get_input(inputs, "theta")
+        theta = inputs["theta"]
         dv_dt = -params["gravity"] * lnp.sin(theta)
-        v = self.get_state(states, "v")
+        v = states["v"]
         vx = v * lnp.cos(theta)
 
         # dvx_dt = dv_dt * lnp.cos(theta)
@@ -255,8 +253,8 @@ class DistanceModel(StateSpaceModel):
         time_dot = 1 / (vx + 1e-9)
         y_dot = lnp.tan(theta)
         # Assemble result
-        states_dot = self.make_vector(
-            group="states_dot", time_dot=time_dot, v_dot=v_dot, y_dot=y_dot,
+        states_dot = self.make_dict(
+            group="states_dot", time=time_dot, v=v_dot, y=y_dot,
         )
 
         return self.make_state_space_model_return(states_dot=states_dot)

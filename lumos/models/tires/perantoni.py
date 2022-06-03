@@ -42,9 +42,9 @@ class PerantoniTire(BaseTire):
         params = self._params
 
         # unpack inputs
-        kappa = self.get_input(inputs, "kappa")
-        alpha = self.get_input(inputs, "alpha")
-        Fz = self.get_input(inputs, "Fz")
+        kappa = inputs["kappa"]
+        alpha = inputs["alpha"]
+        Fz = inputs["Fz"]
 
         # unpack parameters
         Fz1 = params["Fz1"]
@@ -86,9 +86,7 @@ class PerantoniTire(BaseTire):
         Fy = -muy * Fz * alpha_n / rho
 
         # Fill moments with 0.0
-        outputs = self.make_vector(
-            group="outputs", Fx=Fx, Fy=Fy, Mx=0.0, My=0.0, Mz=0.0
-        )
+        outputs = dict(Fx=Fx, Fy=Fy, Mx=0.0, My=0.0, Mz=0.0)
         return ModelReturn(outputs=outputs)
 
     @classmethod

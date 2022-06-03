@@ -66,7 +66,7 @@ class TestMF52Outputs(unittest.TestCase):
 
         # Nxm matrix: N vectors with each vector size m
         inputs = np.array(list(itertools.product(*val_list)))
-        outputs, *_ = lmap(self.model.forward)(inputs)
+        outputs, *_ = lmap(self.model.forward_with_arrays)(inputs)
         return outputs
 
     def test_combined_load(self):

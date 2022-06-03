@@ -18,6 +18,18 @@ from lumos.optimal_control.nlp import CasConstraints, JaxConstraints
 logger = logging.getLogger(__name__)
 
 
+# Convert from names and arrays to dictionary
+def _array_to_dict(names, values):
+    # We could do dict(zip(names, values)), but unfortunately this does NOT work
+    # for casadi as casadi matrices are designed to be non-iterable
+    # see: https://github.com/casadi/casadi/issues/2278
+    return {name: values[idx] for idx, name in enumerate(names)}
+
+
+# We use namedtuple to make the io names immutable after generation. They will be used
+# for two types of names:
+# the direct names: which are fully defined by the model itself
+# the 'names': which is the eventual IO taking into consideration submodels and etc.
 ModelIO = namedtuple("BaseIO", ("inputs", "outputs", "residuals"))
 StateSpaceIO = namedtuple(
     "StateSpaceIO",
@@ -31,7 +43,7 @@ def model_io(
     """Decorator to set the input and output names of a stateless model."""
 
     def wrapper(cls):
-        cls.names = ModelIO(inputs=inputs, outputs=outputs, residuals=residuals)
+        cls._direct_names = ModelIO(inputs=inputs, outputs=outputs, residuals=residuals)
         return cls
 
     return wrapper
@@ -56,10 +68,9 @@ def state_space_io(
                 "StateSpaceModel. Use model_io for other models"
             )
 
-        states_dot = tuple([n + "_dot" for n in states])
-        cls.names = StateSpaceIO(
+        cls._direct_names = StateSpaceIO(
             states=states,
-            states_dot=states_dot,
+            states_dot=states,  # use the same name as states for the states_dot
             inputs=inputs,
             outputs=outputs,
             con_outputs=con_outputs,
@@ -74,12 +85,28 @@ def state_space_io(
 class ModelReturn(NamedTuple):
     """Return data structure for a static model."""
 
-    outputs: lnp.ndarray = np.array([])
-    residuals: lnp.ndarray = np.array([])
+    outputs: Dict = {}
+    residuals: Dict = {}
 
 
 class StateSpaceModelReturn(NamedTuple):
     """Return data structure for state space model."""
+
+    states_dot: Dict = {}
+    outputs: Dict = {}
+    con_outputs: Dict = {}
+    residuals: Dict = {}
+
+
+class ArrayModelReturn(NamedTuple):
+    """Return data structure for a static model in array forms."""
+
+    outputs: lnp.ndarray = np.array([])
+    residuals: lnp.ndarray = np.array([])
+
+
+class ArrayStateSpaceModelReturn(NamedTuple):
+    """Return data structure for state space model in array forms."""
 
     # NOTE: we use np empty array instead of lnp.array([]) here because the type is
     # not really affected by user backend choice as it's determined already during the
@@ -93,9 +120,6 @@ class StateSpaceModelReturn(NamedTuple):
 class Model(CompositeModel):
     """Abstract class for mathematical models of the simplest form."""
 
-    # Names of variables in each group.
-    names: Dict[str, Tuple[str, ...]]
-
     # parameters of the model.
     # TODO: need to constrain this more.
     _params: Dict[str, Any]
@@ -107,6 +131,9 @@ class Model(CompositeModel):
         self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
+
+        # Build instance specific name attributes
+        self._construct_io_names()
 
     @abstractmethod
     def forward(self, *args, **kwargs):
@@ -121,7 +148,54 @@ class Model(CompositeModel):
         self.set_recursive_params(params)
         return self.forward(inputs)
 
+    def apply_and_forward_with_arrays(self, inputs, params):
+        self.set_recursive_params(params)
+        return self.forward_with_array(inputs)
+
+    def _construct_io_names(self):
+        """Create model io names while also taking into account submodels compositoin"""
+
+        self.names = ModelIO(
+            inputs=self._direct_names.inputs,
+            residuals=self._direct_names.residuals,
+            outputs=self._direct_names.outputs
+            + tuple(self._collect_children_outputs()),
+        )
+
+    def _collect_children_outputs(self):
+        """Collect all children outputs and prefix them with submodel_name
+        
+        
+        eg: the 'power' output of the 'engine' submodel becomes 'engine.power'
+        """
+        children_outputs = []
+        if not self.is_leaf():
+            for submodel_name, model in self._submodels.items():
+                children_outputs += [
+                    submodel_name + "." + n for n in model.names.outputs
+                ]
+        return children_outputs
+
+    def combine_submodel_outputs(self, **kwargs):
+        """combine the outputs from submodels into large dictionary
+        
+        kwargs: {name_of_submodel: vector_of_outputs}
+        """
+        combined_dict = {}
+        for submodel_name, submodel_outputs in kwargs.items():
+            # TODO: maybe we could convert the following to a helper method?
+            combined_dict.update(
+                {submodel_name + "." + n: v for n, v in submodel_outputs.items()}
+            )
+
+        return combined_dict
+
     @classmethod
+    def get_direct_group_names(cls, group: str) -> Tuple[str, ...]:
+        """Return the direct names of variables inside an IO group."""
+
+        return getattr(cls._direct_names, group)
+
     def get_group_names(self, group: str) -> Tuple[str, ...]:
         """Return the names of variables inside an IO group."""
 
@@ -160,6 +234,18 @@ class Model(CompositeModel):
     def get_output(self, outputs: lnp.ndarray, name: str) -> float:
         return outputs[self.get_var_index(group="outputs", name=name)]
 
+    def forward_with_arrays(self, inputs):
+        inputs = _array_to_dict(self.names.inputs, inputs)
+        model_return = self.forward(inputs)
+
+        # Convert from dictionary to arrays for the outputs
+        kwargs = {
+            g: self.make_vector(g, **getattr(model_return, g))
+            for g in model_return._fields
+        }
+
+        return ArrayModelReturn(**kwargs)
+
     @property
     def num_inputs(self):
         return self.get_num_vars(group="inputs")
@@ -188,9 +274,7 @@ class Model(CompositeModel):
         """
         return np.abs(np.random.randn(self.get_num_vars(group=group)))
 
-    def make_vector(self, group: str, **kwargs) -> lnp.ndarray:
-        """Create a state vector from kwargs. All values must be provided."""
-
+    def _check_keys(self, group, kwargs):
         # check missing names
         input_set = set(kwargs.keys())
         expected_set = set(self.get_group_names(group))
@@ -205,7 +289,23 @@ class Model(CompositeModel):
                     f"Missing {group} values for {expected_set - input_set}"
                 )
 
+    def make_vector(self, group: str, **kwargs) -> lnp.ndarray:
+        """Create a state vector from kwargs. All values must be provided."""
+        self._check_keys(group, kwargs)
         return lnp.array(list(kwargs[name] for name in self.get_group_names(group)))
+
+    def make_dict(self, group: str, **kwargs) -> Dict[str, Any]:
+        """Create a dictionary from kwargs. All values must be provided.
+        
+        This is actually just a thing wrapper on the standard dictionary construction,
+        but it additionally checks if all the necessary keys exist
+        """
+        self._check_keys(group, kwargs)
+        return kwargs
+
+    def make_const_dict(self, group, value: float) -> Dict[str, Any]:
+        """Create a dictionary for a group filled with constant values."""
+        return {n: value for n in self.get_group_names(group)}
 
     def plot(self, *args, **kwargs):
         raise NotImplementedError
@@ -250,6 +350,10 @@ class StateSpaceModel(Model):
         self.set_recursive_params(params)
         return self.forward(states, inputs, mesh)
 
+    def apply_and_forward_with_arrays(self, states, inputs, mesh, params):
+        self.set_recursive_params(params)
+        return self.forward_with_arrays(states, inputs, mesh)
+
     def make_state_space_model_return(
         self,
         states_dot: lnp.ndarray,
@@ -260,11 +364,28 @@ class StateSpaceModel(Model):
         kwargs = {"states_dot": states_dot}
         if outputs is not None:
             kwargs["outputs"] = outputs
-            kwargs["con_outputs"] = self._extract_con_outputs(outputs)
 
         if residuals is not None:
             kwargs["residuals"] = residuals
+
         return StateSpaceModelReturn(**kwargs)
+
+    def _construct_io_names(self):
+        """Create model io names while also taking into account submodels compositoin.
+        
+        Similar to Model._construct_io_names, but now needs to operate on more groups
+        for state space model.
+        """
+
+        self.names = StateSpaceIO(
+            inputs=self._direct_names.inputs,
+            states=self._direct_names.states,
+            states_dot=self._direct_names.states_dot,
+            con_outputs=self._direct_names.con_outputs,
+            residuals=self._direct_names.residuals,
+            outputs=self._direct_names.outputs
+            + tuple(self._collect_children_outputs()),
+        )
 
     def _check_names(self):
         # Ensure con_outputs all exist
@@ -272,11 +393,8 @@ class StateSpaceModel(Model):
             if c not in self.get_group_names("outputs"):
                 raise ValueError(f"constraint outputs {c} not found in outputs")
 
-    def _extract_con_outputs(self, outputs: lnp.ndarray) -> lnp.ndarray:
-        con_outputs_dict = {
-            c: self.get_output(outputs, c) for c in self.get_group_names("con_outputs")
-        }
-        return self.make_vector(group="con_outputs", **con_outputs_dict)
+    def _extract_con_outputs(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
+        return {c: outputs[c] for c in self.get_group_names("con_outputs")}
 
     @property
     def num_implicit_res(self):
@@ -292,6 +410,25 @@ class StateSpaceModel(Model):
 
     def get_state(self, states: lnp.ndarray, name: str) -> float:
         return states[self.get_var_index(group="states", name=name)]
+
+    def forward_with_arrays(self, states, inputs, mesh):
+
+        states = _array_to_dict(self.names.states, states)
+        inputs = _array_to_dict(self.names.inputs, inputs)
+        model_return = self.forward(states, inputs, mesh)
+
+        # Convert from dictionary to arrays for the outputs
+        kwargs = {
+            g: self.make_vector(g, **getattr(model_return, g))
+            for g in model_return._fields
+            if g != "con_outputs"
+        }
+
+        kwargs["con_outputs"] = self.make_vector(
+            "con_outputs", **self._extract_con_outputs(model_return.outputs)
+        )
+
+        return ArrayStateSpaceModelReturn(**kwargs)
 
     def implicit(
         self,
@@ -313,7 +450,7 @@ class StateSpaceModel(Model):
         is a hard-coded limitation of the current design.
         """
 
-        model_return = self.forward(states, inputs, mesh)
+        model_return = self.forward_with_arrays(states, inputs, mesh)
 
         # TODO: here we return an array, but maybe we should at least always check
         # (especially for user-defined ones) that the residual size is correct.
@@ -490,7 +627,7 @@ class StateSpaceModel(Model):
 
         # FIXME: handle batched_forward better
         self._batched_forward = lnp.use_backend("jax")(
-            jit(vmap(self.apply_and_forward, in_axes=[0, 0, 0, None]))
+            jit(vmap(self.apply_and_forward_with_arrays, in_axes=[0, 0, 0, None]))
         )
 
     def _make_custom_model_algebra_cons(self):
@@ -532,7 +669,9 @@ class StateSpaceModel(Model):
 
         # Only the model calls need to go inside the context manager.
         with lnp.use_backend("casadi"):
-            model_return = self.apply_and_forward(states, inputs, mesh, cas_dict_params)
+            model_return = self.apply_and_forward_with_arrays(
+                states, inputs, mesh, cas_dict_params
+            )
             res = self._apply_and_flat_implicit(stage_vars, mesh, cas_dict_params)
             lagrange = lnp.dot(mult, res)
 
@@ -544,6 +683,7 @@ class StateSpaceModel(Model):
         cfile = filename + ".c"
         # FIXME: path management, currently local directory only
         codegen = cas.CodeGenerator(cfile)
+
         codegen.add(
             cas.Function(
                 "forward", [states, inputs, mesh, cas_flat_params], [*model_return]

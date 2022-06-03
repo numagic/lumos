@@ -71,13 +71,12 @@ class BaseModelTest:
 
     @classmethod
     def setUpClass(cls):
-        # Record the original backend so we can store it if we've changed it.
         cls.model = cls.ModelClass()
         cls.params = cls.model.get_recursive_params()
 
-        # FIXME: here we can often run into divide by zero with these values
         cls.args_dict = {
-            g: cls.model.make_random_vector(group=g) for g in cls.forward_arguments
+            g: {n: 0.1 for n in cls.model.get_group_names(g)}
+            for g in cls.forward_arguments
         }
 
         if cls.need_mesh_input:
@@ -93,8 +92,14 @@ class BaseModelTest:
         # return float, but that's not what we need. We want to make sure t works with
         # Casadi symbolic variables. (But maybe if the test works with float, then it
         # will work with symbolic variables as well?)
+        def _nested_dict_to_mx(d):
+            if isinstance(d, dict):
+                return {k: _nested_dict_to_mx(v) for k, v in d.items()}
+            else:
+                return MX(d)
+
         if lnp.get_backend() == "casadi":
-            args_dict = {k: MX(v) for k, v in self.args_dict.items()}
+            args_dict = _nested_dict_to_mx(self.args_dict)
         else:
             args_dict = self.args_dict
 
@@ -121,14 +126,25 @@ class BaseModelTest:
     # casadi, but don't touch anything else to do with Casadi?
     @use_backends(backends=["casadi"])
     def test_code_generation(self):
-        args_dict = {k: MX.sym(k, np.size(v)) for k, v in self.args_dict.items()}
+        # Code generation requires using the array inputs interface
+        args_dict = {
+            k: MX.sym("mesh") if k == "mesh" else MX.sym(k, self.model.get_num_vars(k))
+            for k, v in self.args_dict.items()
+        }
 
         # TODO: need to add parameter to the function
         f = Function(
-            "f", list(args_dict.values()), list(self.model.forward(**args_dict))
+            "f",
+            list(args_dict.values()),
+            list(self.model.forward_with_arrays(**args_dict)),
         )
-        # call the function
-        _ = f.call(list(self.args_dict.values()))
+
+        # call the function with concrete values
+        args_dict = {
+            k: v if k == "mesh" else self.model.make_vector(k, **v)
+            for k, v in self.args_dict.items()
+        }
+        _ = f.call(list(args_dict.values()))
 
         # Note: name must start with a letter, have no underscore, doesn't
         # overlap with some special names. So can't pass in full path name.
@@ -152,6 +168,18 @@ class BaseModelTest:
 class BaseStateSpaceModelTest(BaseModelTest):
     forward_arguments: List[str] = ["inputs", "states"]
     need_mesh_input = True
+
+    def _forward_euler(self, init_states, inputs, time_step, num_steps):
+        """Helper to run forward euler with a fixed inputs for a few steps"""
+
+        # Ensure we don't modify the initial states
+        states = dict(init_states)
+        for step in range(num_steps):
+            model_return = self.model.forward(states, inputs, step * time_step)
+            for k in states:
+                states[k] += model_return.states_dot[k] * time_step
+
+        return states, model_return.outputs
 
 
 if __name__ == "__name__":

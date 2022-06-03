@@ -13,12 +13,14 @@ class TestConstAero(BaseModelTest, unittest.TestCase):
     ModelClass: type = ConstAero
 
     def test_outputs_are_correct(self):
-        inputs = self.model.make_random_vector("inputs")
+        inputs = dict(
+            zip(self.model.names.inputs, self.model.make_random_vector("inputs"))
+        )
         model_return = self.model.forward(inputs)
 
-        expected_outputs = self.model.make_vector("outputs", **self.model._params)
-
-        np.testing.assert_allclose(model_return.outputs, expected_outputs)
+        # Check constant values are the same as in the params
+        for k, v in model_return.outputs.items():
+            self.assertAlmostEqual(v, self.model._params[k])
 
 
 class TestGPAero(BaseModelTest, unittest.TestCase):

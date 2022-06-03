@@ -16,17 +16,15 @@ class TestPerantoniTire(BaseModelTest, unittest.TestCase):
     def _get_fx_from_kappa(self, kappa: float, input_dict: Dict[str, float]) -> float:
         """Helper to perform longitudinal sweep"""
         input_dict["kappa"] = kappa
-        inputs = self.model.make_vector(group="inputs", **input_dict)
-        outputs, *_ = self.model.forward(inputs=inputs)
+        outputs, *_ = self.model.forward(inputs=input_dict)
 
-        return self.model.get_output(outputs, "Fx")
+        return outputs["Fx"]
 
     def _get_fy_from_alpha(self, alpha: float, input_dict: Dict[str, float]) -> float:
         input_dict["alpha"] = alpha
-        inputs = self.model.make_vector(group="inputs", **input_dict)
-        outputs, *_ = self.model.forward(inputs=inputs)
+        outputs, *_ = self.model.forward(inputs=input_dict)
 
-        return self.model.get_output(outputs, "Fy")
+        return outputs["Fy"]
 
     def test_pure_longitudinal(self):
         """Test characteristics in pure longitudinal load

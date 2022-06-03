@@ -14,7 +14,7 @@ def main():
         sim_config=DroneSimulation.get_sim_config(
             num_intervals=99,
             hessian_approximation=h_approx,
-            backend="jax",
+            backend="casadi",
             transcription="LGR",
             is_condensed=False,
         )

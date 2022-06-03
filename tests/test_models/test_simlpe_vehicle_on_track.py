@@ -1,3 +1,4 @@
+from mimetypes import init
 import unittest
 
 import numpy as np
@@ -15,7 +16,7 @@ class TestSimpleVehicleOnTrack(BaseStateSpaceModelTest, unittest.TestCase):
         # FIXME: this is really bad. How do we get the rolling radius estimate?
         no_slip_omega = vx / 0.33
 
-        return self.model.make_vector(
+        return self.model.make_dict(
             group="states",
             time=0,
             n=0,
@@ -31,7 +32,7 @@ class TestSimpleVehicleOnTrack(BaseStateSpaceModelTest, unittest.TestCase):
 
     def test_turn_left(self):
         init_states = self._get_initial_states()
-        inputs = self.model.make_vector(
+        inputs = self.model.make_dict(
             group="inputs",
             throttle=0.0,
             brake=0,
@@ -45,9 +46,9 @@ class TestSimpleVehicleOnTrack(BaseStateSpaceModelTest, unittest.TestCase):
         model_return = self.model.forward(init_states, inputs, mesh=0.0)
 
         # should directly get +ve lateral acceleration, +ve yaw acceleration and derivative of vy
-        self.assertGreater(self.model.get_state(model_return.states_dot, "vy"), 0)
-        self.assertGreater(self.model.get_state(model_return.states_dot, "yaw_rate"), 0)
-        self.assertGreater(self.model.get_output(model_return.outputs, "ay"), 0)
+        self.assertGreater(model_return.states_dot["vy"], 0)
+        self.assertGreater(model_return.states_dot["yaw_rate"], 0)
+        self.assertGreater(model_return.outputs["vehicle.ay"], 0)
 
         # After a few timesteps:
         # The speed should decelerate due to cornering resistance
@@ -57,41 +58,33 @@ class TestSimpleVehicleOnTrack(BaseStateSpaceModelTest, unittest.TestCase):
         num_steps = 21
         dist_step = 1.0
 
-        # Careful, numpy arrays are mutable!
-        states = np.copy(init_states)
-        distance = 0.0
-        for _ in range(num_steps):
-            model_return = self.model.forward(states, inputs, mesh=distance)
-            states += model_return.states_dot * dist_step
-            distance += dist_step
+        states, outputs = self._forward_euler(init_states, inputs, dist_step, num_steps)
 
-        self.assertLess(
-            self.model.get_state(states, "vx"), self.model.get_state(init_states, "vx")
-        )
-        self.assertLess(self.model.get_state(states, "vy"), 0)
-        self.assertGreater(self.model.get_state(states, "yaw_rate"), 0)
+        self.assertLess(states["vx"], init_states["vx"])
+        self.assertLess(states["vy"], 0)
+        self.assertGreater(states["yaw_rate"], 0)
 
         # Assert position states
         self.assertGreater(
-            self.model.get_output(model_return.outputs, "yaw_angle"),
+            outputs["kinematics.yaw_angle"],
             0,
             msg="Yaw angle should be positive for turning left",
         )
 
         self.assertGreater(
-            self.model.get_state(states, "n"),
+            states["n"],
             0,
             msg="Distance across should be positive for turning left on straightline track",
         )
 
         self.assertGreater(
-            self.model.get_state(states, "time"),
+            states["time"],
             0,
             msg="Time used should be positive for turning left on straightline track",
         )
 
         self.assertLess(
-            distance,
-            self.model.get_state(init_states, "vx") * dist_step * num_steps,
+            dist_step * num_steps,
+            init_states["vx"] * dist_step * num_steps,
             msg="Distance travelled should be less than going straight from the start",
         )

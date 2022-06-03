@@ -42,10 +42,13 @@ def get_default_bounds() -> Dict[str, Any]:
 
     # Limit the slip
     bounds += tuple(
-        BoundConfig("con_outputs", "slip_ratio_" + c, (-0.05, 0.05)) for c in _corners
+        BoundConfig("con_outputs", "vehicle.slip_ratio_" + c, (-0.05, 0.05))
+        for c in _corners
     )
     bounds += tuple(
-        BoundConfig("con_outputs", "slip_angle_" + c, (-np.deg2rad(5), np.deg2rad(5)))
+        BoundConfig(
+            "con_outputs", "vehicle.slip_angle_" + c, (-np.deg2rad(5), np.deg2rad(5))
+        )
         for c in _corners
     )
 
@@ -79,10 +82,10 @@ def get_default_scales() -> Tuple[ScaleConfig]:
         ScaleConfig("states", "wheel_speed_fr", 50.0),
         ScaleConfig("states", "wheel_speed_rl", 50.0),
         ScaleConfig("states", "wheel_speed_rr", 50.0),
-        ScaleConfig("states_dot", "wheel_speed_fl_dot", 50.0),
-        ScaleConfig("states_dot", "wheel_speed_fr_dot", 50.0),
-        ScaleConfig("states_dot", "wheel_speed_rl_dot", 50.0),
-        ScaleConfig("states_dot", "wheel_speed_rr_dot", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_fl", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_fr", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_rl", 50.0),
+        ScaleConfig("states_dot", "wheel_speed_rr", 50.0),
     )
     return scales
 

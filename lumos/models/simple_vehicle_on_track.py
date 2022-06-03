@@ -8,16 +8,22 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
 
 # Combine the signals to create the names. TODO: can we make it more automatic?
 @state_space_io(
-    states=TrackPosition2D.get_group_names("states")
-    + SimpleVehicle.get_group_names("states"),
-    inputs=SimpleVehicle.get_group_names("inputs")
+    states=TrackPosition2D.get_direct_group_names("states")
+    + SimpleVehicle.get_direct_group_names("states"),
+    inputs=SimpleVehicle.get_direct_group_names("inputs")
     + ("track_curvature", "track_heading"),
-    outputs=TrackPosition2D.get_group_names("outputs")
-    + SimpleVehicle.get_group_names("outputs"),
-    con_outputs=TrackPosition2D.get_group_names("con_outputs")
-    + SimpleVehicle.get_group_names("con_outputs"),
-    residuals=TrackPosition2D.get_group_names("residuals")
-    + SimpleVehicle.get_group_names("residuals"),
+    con_outputs=(
+        "vehicle.slip_ratio_fl",
+        "vehicle.slip_ratio_fr",
+        "vehicle.slip_ratio_rl",
+        "vehicle.slip_ratio_rr",
+        "vehicle.slip_angle_fl",
+        "vehicle.slip_angle_fr",
+        "vehicle.slip_angle_rl",
+        "vehicle.slip_angle_rr",
+    ),
+    residuals=TrackPosition2D.get_direct_group_names("residuals")
+    + SimpleVehicle.get_direct_group_names("residuals"),
 )
 class SimpleVehicleOnTrack(StateSpaceModel):
     _submodel_names = ("vehicle", "kinematics")
@@ -33,39 +39,17 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             "kinematics": "TrackPosition2D",
         }
 
-    def forward(
-        self,
-        states: lnp.ndarray,
-        inputs: lnp.ndarray,
-        mesh: float = 0.0,
-        params: Optional[Dict[str, Any]] = None,
-    ):
-        # TODO: since the distance is an essential input, we should NOT give it a
-        # default value to catch error, but params is ordered after it and needs a
-        # default
+    def forward(self, states: lnp.ndarray, inputs: lnp.ndarray, mesh: float):
 
         # Pick out the vehicle inputs
-        # FIXME: we had a bug earlier here where the whole inputs are passed to the
-        # vehicle (so larger size) yet eveything still works. In fact if the larger
-        # vector passed in has the small vector as the first sub-vecotr, then it would
-        # work --> this is very dangerous as it just runs away silently with wrong
-        # input size.
         vehicle_inputs = {
-            k: self.get_input(inputs, k)
-            for k in self.get_submodel("vehicle").get_group_names("inputs")
+            k: inputs[k] for k in self.get_submodel("vehicle").get_group_names("inputs")
         }
-        vehicle_inputs = self.get_submodel("vehicle").make_vector(
-            group="inputs", **vehicle_inputs
-        )
 
         # Pick out vehicle states
-        vehicle_states = self.get_submodel("vehicle").make_vector(
-            group="states",
-            **{
-                k: self.get_state(states, k)
-                for k in self.get_submodel("vehicle").get_group_names("states")
-            }
-        )
+        vehicle_states = {
+            k: states[k] for k in self.get_submodel("vehicle").get_group_names("states")
+        }
 
         # Pick out vehicle params. NOT DONE! NOT EASY!
         vehicle_return = self.get_submodel("vehicle").forward(
@@ -74,50 +58,36 @@ class SimpleVehicleOnTrack(StateSpaceModel):
 
         # Call Kinematics model
         # Pick out states
-        kinematic_states = self.get_submodel("kinematics").make_vector(
-            group="states",
-            **{
-                k: self.get_state(states, k)
-                for k in self.get_submodel("kinematics").get_group_names("states")
-            }
-        )
+        kinematic_states = {
+            k: states[k]
+            for k in self.get_submodel("kinematics").get_group_names("states")
+        }
 
         # pick out inputs
         # NOTE: this step is very custom, because the inputs come from vehicle model
         # outputs
-        inputs_from_vehicle = {
-            k: self.get_submodel("vehicle").get_state(vehicle_states, k)
-            for k in ("vx", "vy", "yaw_rate")
-        }
+        inputs_from_vehicle = {k: vehicle_states[k] for k in ("vx", "vy", "yaw_rate")}
 
-        track_inputs = {
-            k: self.get_input(inputs, k) for k in ["track_curvature", "track_heading"]
-        }
+        track_inputs = {k: inputs[k] for k in ["track_curvature", "track_heading"]}
 
-        kinematic_inputs = self.get_submodel("kinematics").make_vector(
-            group="inputs", **track_inputs, **inputs_from_vehicle
-        )
+        kinematic_inputs = dict(**track_inputs, **inputs_from_vehicle)
 
         # Pick out vehicle params. NOT DONE! NOT EASY!
         kinematics_return = self.get_submodel("kinematics").forward(
             states=kinematic_states, inputs=kinematic_inputs, mesh=mesh,
         )
 
-        # Assemble final outputs
-        # NOTE: it's difficult to know which element of the big flat signal needs to
-        # come from the outputs of which submodel
-        # Hardcoded order for now! -> this should be consistent with the model names
-        # ordering when the are created
-
         # Convert to distance domain derivatives
-        dt_ds = self.get_submodel("kinematics").get_state(
-            kinematics_return.states_dot, "time"
-        )
-        states_dot = lnp.concatenate(
-            [kinematics_return.states_dot, vehicle_return.states_dot * dt_ds]
-        )
+        dt_ds = kinematics_return.states_dot["time"]
+        states_dot = {
+            **kinematics_return.states_dot,
+            **{k: v * dt_ds for k, v in vehicle_return.states_dot.items()},
+        }
 
-        outputs = lnp.concatenate([kinematics_return.outputs, vehicle_return.outputs])
+        # Assemble final outputs
+        outputs = self.combine_submodel_outputs(
+            vehicle=vehicle_return.outputs, kinematics=kinematics_return.outputs
+        )
 
         residuals = vehicle_return.residuals
 
