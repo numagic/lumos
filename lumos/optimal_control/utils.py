@@ -290,6 +290,14 @@ class DecVarOperator:
     ) -> Union[float, lnp.ndarray]:
         return x[self.get_var_index_in_dec(group=group, name=name, stage=stage)]
 
+    def get_stage_var_array(self, x):
+        """Return an N x d array, for N stages and d variables per stage"""
+
+        return np.reshape(
+            x[: self.num_dec - self.num_global_var],
+            (self.num_stages, self.num_var_stage),
+        )
+
 
 def create_offset_structure(
     base_rows: List[int],
