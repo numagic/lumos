@@ -69,6 +69,15 @@ class TranscriptionConfig:
 
 
 @dataclass
+class LoggingConfig:
+    """Controls if and where the results as well as debug info are written to"""
+
+    sim_name: str = "simulation"
+    results_dir: str = "results"
+    log_every_nth_iter: int = 0
+
+
+@dataclass
 class SimConfig:
     """Simulation Configuraration for Optimal Control"""
 
@@ -82,7 +91,7 @@ class SimConfig:
     boundary_conditions: Tuple[BoundaryConditionConfig] = ()
     bounds: Tuple[BoundConfig] = ()
     scales: Tuple[ScaleConfig] = ()
-    logging_config: Dict[str, Any] = field(default_factory=dict)
+    logging_config: Optional[LoggingConfig] = None
 
     def __post_init__(self):
         # We allow a single string argument (with no additional arugments or relying on
@@ -92,15 +101,6 @@ class SimConfig:
         # transcription can have its own config.
         if isinstance(self.transcription, str):
             self.transcription = (self.transcription,)
-
-        if not self.logging_config:
-            self.logging_config = {
-                "results_dir": "results",  # store in a new directory at current directory
-                "sim_name": None,
-                "log_final_iter": False,
-                "log_metrics_history": False,
-                "log_every_nth_iter": 0,
-            }  # if 0, logging is off
 
         # Additional operations for desrialization for config fields
         if self.bounds and isinstance(self.bounds[0], dict):

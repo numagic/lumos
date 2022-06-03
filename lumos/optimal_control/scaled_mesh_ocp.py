@@ -731,23 +731,14 @@ class ScaledMeshOCP(CompositeProblem):
         """Create directory and storage for logging"""
         config = self.logging_config
 
-        if (
-            config["log_final_iter"]
-            or config["log_metrics_history"]
-            or config["log_every_nth_iter"] > 0
-        ):
-            # Create unique name (not guaranteed unique, but that would depend on sim_id or name in the future)
-            if config["sim_name"] is None:
-                name_suffix = ""
-            else:
-                name_suffix = "_" + config["sim_name"]
-            subdir_name = datetime.now().strftime("%Y%m%d-%H%M%S") + name_suffix
-            self._logging_dir = os.path.join(config["results_dir"], subdir_name)
+        if config is not None:
+            # Create time + name
+            subdir_name = (
+                datetime.now().strftime("%Y%m%d-%H%M%S") + "_" + config.sim_name
+            )
+            self._logging_dir = os.path.join(config.results_dir, subdir_name)
             Path(self._logging_dir).mkdir(parents=True, exist_ok=True)
-
-        if config["log_metrics_history"]:
-            # Create initial dataframe for the history
-            self._metrics_history_df = pd.DataFrame(data=[], columns=self._metric_names)
+            self._metrics_history_list = []
 
     @property
     def logging_dir(self):
@@ -759,81 +750,85 @@ class ScaledMeshOCP(CompositeProblem):
         metrics: intermediate call arguments turned into a dictionary
         """
         config = self.logging_config
-        iter_num = metrics["iter_count"]
+        if config is not None:
+            iter_num = metrics["iter_count"]
+            self._metrics_history_list.append(metrics)
 
-        if config["log_metrics_history"]:
-            self._metrics_history_df = self._metrics_history_df.append(
-                metrics, ignore_index=True
-            )
-
-        if (
-            config["log_every_nth_iter"] > 0
-            and iter_num % config["log_every_nth_iter"] == 0
-        ):
-            # NOTE: we could choose not to write out here and keep the dfs in memory,
-            # but this will most likely cause us to run out of memory when the prolbem
-            # gets big. Although we combine the df in any case...
-            self._create_result_df(
-                self._last_iter_dec_var,
-                file_path=os.path.join(self._logging_dir, f"iter_{iter_num}.csv"),
-                iter_num=iter_num,
-            )
-
-            if config["log_metrics_history"]:
-                # We also write this out at every iteration so we can see the results
-                # before the optimization finisehs
-                self._metrics_history_df.to_csv(
-                    os.path.join(self._logging_dir, "metrics_history.csv"), index=False
+            if (
+                config.log_every_nth_iter > 0
+                and iter_num % config.log_every_nth_iter == 0
+            ):
+                # NOTE: we could choose not to write out here and keep the dfs in memory,
+                # but this will most likely cause us to run out of memory when the prolbem
+                # gets big. Although we combine the df in any case...
+                self._create_result_df(
+                    self._last_iter_dec_var,
+                    file_path=os.path.join(self._logging_dir, f"iter_{iter_num}.csv"),
+                    iter_num=iter_num,
                 )
 
     def _log_final_iter(self):
         # TODO: we should be able to do better than these hard-coded names everywhere.
         config = self.logging_config
-
-        if config["log_every_nth_iter"] > 0:
-            # Combine all iteration results
-            iter_files = glob.glob(os.path.join(self._logging_dir, "iter*.csv"))
-            df_list = [pd.read_csv(f) for f in iter_files]
-            all_iters_df = (
-                pd.concat(df_list, axis=0)
-                .sort_values(["iter", "distance"])
-                .reset_index(drop=True)
-            )
-
-            # Remove all the iteration files, and dump the combined one.
-            pq.write_table(
-                pa.Table.from_pandas(all_iters_df),
-                os.path.join(self._logging_dir, "all_iters.parquet"),
-            )
-            for file in iter_files:
-                os.remove(file)
-
-            # Compute what causes the max violation at each iteration
-            con_names = [c for c in df_list[0].columns if "_con." in c]
-            # Initialize storage, watchout for datatype
-            self._metrics_history_df["max_violation_con_name"] = "null"
-            self._metrics_history_df["max_violation_distance"] = -1.0
-            # NOTE: here the file list will not be arranged according to iter number.
-            for iter_df in df_list:
-                idx, column = iter_df[con_names].abs().stack().idxmax()
-                iter_num = iter_df["iter"][0]
-                self._metrics_history_df.loc[
-                    iter_num, "max_violation_con_name"
-                ] = column
-                self._metrics_history_df.loc[
-                    iter_num, "max_violation_distance"
-                ] = iter_df["distance"][idx]
-
-        if config["log_metrics_history"]:
-            self._metrics_history_df.to_csv(
-                os.path.join(self._logging_dir, "metrics_history.csv"), index=False
-            )
-
-        if config["log_final_iter"]:
+        if config is not None:
+            # Write the result file
+            result_file = os.path.join(self._logging_dir, "results.csv")
             self._create_result_df(
-                self._last_iter_dec_var,
-                file_path=os.path.join(self._logging_dir, f"final_iter.csv"),
-                iter_num=self._num_iter,  # TODO: unify num_iter and iter_num?
+                self._last_iter_dec_var, file_path=result_file, iter_num=self._num_iter,
+            )
+
+            # Combine the metrics history
+            metrics_history_df = pd.DataFrame(self._metrics_history_list)
+
+            if config.log_every_nth_iter > 0:
+
+                if self._num_iter % config.log_every_nth_iter == 0:
+                    # If we happen to record the last iteration as well, drop it
+                    # and remove it
+                    last_iter_file = os.path.join(
+                        self._logging_dir, f"iter_{self._num_iter}.csv"
+                    )
+                    os.remove(last_iter_file)
+
+                # Combine all iteration results
+                iter_files = glob.glob(os.path.join(self._logging_dir, "iter*.csv"))
+
+                # Add result file to the file list to ensure we always see the last iter
+                iter_files.append(result_file)
+
+                df_list = [pd.read_csv(f) for f in iter_files]
+                all_iters_df = (
+                    pd.concat(df_list, axis=0)
+                    .sort_values(["iter", "mesh"])
+                    .reset_index(drop=True)
+                )
+
+                # Remove all the iteration files (except for the results file for the
+                # last iteration), and dump the combined one.
+                pq.write_table(
+                    pa.Table.from_pandas(all_iters_df),
+                    os.path.join(self._logging_dir, "all_iters.parquet"),
+                )
+                for file in iter_files:
+                    if file != result_file:
+                        os.remove(file)
+
+                # Compute what causes the max violation at each iteration
+                con_names = [c for c in df_list[0].columns if "_con." in c]
+                # Initialize storage, watchout for datatype
+                metrics_history_df["max_violation_con_name"] = "NotRecorded"
+                metrics_history_df["max_violation_mesh"] = -1.0
+                # NOTE: here the file list will not be arranged according to iter number.
+                for iter_df in df_list:
+                    idx, column = iter_df[con_names].abs().stack().idxmax()
+                    iter_num = iter_df["iter"][0]
+                    metrics_history_df.loc[iter_num, "max_violation_con_name"] = column
+                    metrics_history_df.loc[iter_num, "max_violation_mesh"] = iter_df[
+                        "mesh"
+                    ][idx]
+
+            metrics_history_df.to_csv(
+                os.path.join(self._logging_dir, "metrics_history.csv"), index=False
             )
 
     def _create_result_df(self, dec_var: np.ndarray, file_path: str, iter_num: int):
@@ -845,36 +840,48 @@ class ScaledMeshOCP(CompositeProblem):
             self._flat_normalized_mesh * self._get_mesh_scale(dec_var),
             self._params,
         )
-
         cons = self.constraints(dec_var)
         # split into interval con and stage con (for lifted problem)
         # FIXME: this assumes ordering of constraints, which would break easily
         if self.is_condensed:
             cons = self.split_constraints(cons)
-            interval_cons = cons["model_algebra"]
-            interval_con_shape = (
-                self.num_stages - 1,
-                self.model.num_states
-                + self.model.num_con_outputs
-                + self.model.num_residuals,
+            condensed_model_algebra_cons = cons["model_algebra"]
+            # Ordering is [condensed_continuity, con_outputs, residuals]
+            interval_cons, stage_cons = np.split(
+                condensed_model_algebra_cons,
+                [(self.num_stages - 1) * self.model.num_states],
             )
-            interval_con_columns = (
-                ["interval_con." + n for n in self.model.get_group_names("con_outputs")]
-                + ["interval_con." + n for n in self.model.get_group_names("residuals")]
-                + ["interval_con." + n for n in self.model.get_group_names("states")]
+
+            stage_cons = np.reshape(
+                stage_cons,
+                (self.num_stages, self.model.num_implicit_res - self.model.num_states),
             )
+
+            stage_con_columns = [
+                "stage_con." + n for n in self.model.get_group_names("con_outputs")
+            ] + ["stage_con." + n for n in self.model.get_group_names("residuals")]
         else:
             cons = self.split_constraints(cons)
             interval_cons = cons["continuity"]
             stage_cons = cons["model_algebra"]
-            interval_con_shape = (self.num_stages - 1, self.model.num_states)
-            interval_con_columns = [
-                "interval_con." + n for n in self.model.get_group_names("states")
-            ]
+            stage_cons = np.reshape(
+                stage_cons, (self.num_stages, self.model.num_implicit_res)
+            )
+            stage_con_columns = (
+                ["stage_con." + n for n in self.model.get_group_names("states_dot")]
+                + ["stage_con." + n for n in self.model.get_group_names("con_outputs")]
+                + ["stage_con." + n for n in self.model.get_group_names("residuals")]
+            )
+
+        stage_cons_df = pd.DataFrame(data=stage_cons, columns=stage_con_columns)
+
+        interval_con_shape = (self.num_stages - 1, self.model.num_states)
+        interval_con_columns = [
+            "interval_con." + n for n in self.model.get_group_names("states")
+        ]
 
         # each interval provides (num_stages_per_interval -1) x num_states constraints
         # for LGR collocation and for quadrature schemes
-        # FIXME: not valid for LGL or LG schemes
         # so in total it provides (num_stages - 1)*num_states constraints
         # (there is always one stage shared between two intervals)
         interval_cons = np.reshape(interval_cons, interval_con_shape)
@@ -886,24 +893,8 @@ class ScaledMeshOCP(CompositeProblem):
             data=interval_cons, columns=interval_con_columns,
         )
 
-        if not self.is_condensed:
-            # Stage constraints are concatenated as [states_dot, outputs]
-            stage_cons = np.reshape(
-                stage_cons, (self.num_stages, self.model.num_implicit_res)
-            )
-            stage_cons_df = pd.DataFrame(
-                data=stage_cons,
-                columns=[
-                    "stage_con." + n for n in self.model.get_group_names("states_dot")
-                ]
-                + ["stage_con." + n for n in self.model.get_group_names("con_outputs")]
-                + ["stage_con." + n for n in self.model.get_group_names("residuals")],
-            )
-
         dec_var_df = pd.DataFrame(
-            data=np.reshape(
-                dec_var, (self.num_stages, self.dec_var_operator.num_var_stage)
-            ),
+            data=self.dec_var_operator.get_stage_var_array(dec_var),
             columns=self.dec_var_operator.stage_var_names,
         )
 
@@ -912,17 +903,12 @@ class ScaledMeshOCP(CompositeProblem):
             columns=["outputs." + n for n in self.model.get_group_names("outputs")],
         )
 
-        if self.is_condensed:
-            df_list = [dec_var_df, outputs_df, interval_cons_df]
-        else:
-            df_list = [dec_var_df, outputs_df, interval_cons_df, stage_cons_df]
+        df_list = [dec_var_df, outputs_df, interval_cons_df, stage_cons_df]
 
         # combine dfs
         result_df = pd.concat(df_list, axis=1)
-        # add distance
-        result_df["distance"] = self._flat_normalized_mesh * self._get_mesh_scale(
-            dec_var
-        )
+        # add mesh
+        result_df["mesh"] = self._flat_normalized_mesh * self._get_mesh_scale(dec_var)
         # add iteration number
         result_df["iter"] = iter_num
         logger.debug("Iteration result dataframe created")

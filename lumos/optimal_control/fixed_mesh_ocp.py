@@ -15,17 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class FixedMeshOCP(ScaledMeshOCP):
-    """Laptime simulation type of problem
-    - fixed grid
-    - distance grid instead of time
-
-    TODO: we could consider the following solutoin:
-    - a fixed mesh problem is just like a scaled_mesh_ocp, but with the bounds on the
-    mesh_scale varaible fixed.
-    - of course we would waste some computes as we have to compute more derivatives etc
-    for which we know actually would just be sparse (or actually not sparse but the
-    corresponding decision variable has no freedom.)
-    """
+    """Optimal Control problem where the mesh is fixed"""
 
     # No Global variables
     global_var_names = []

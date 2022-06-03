@@ -4,6 +4,7 @@ import os
 from lumos.models.composition import ModelMaker
 from lumos.models.simple_vehicle_on_track import SimpleVehicleOnTrack
 from lumos.models.tires.utils import create_params_from_tir_file
+from lumos.optimal_control.config import LoggingConfig
 from lumos.simulations.laptime_simulation import LaptimeSimulation
 
 logger = logging.getLogger(__name__)
@@ -26,13 +27,9 @@ def main():
         backend="casadi",
         track=track_file,
         transcription="LGR",
-        logging_config={
-            "results_dir": "results",  # store in a new directory at current directory
-            "sim_name": track,
-            "log_final_iter": False,
-            "log_metrics_history": False,
-            "log_every_nth_iter": 0,  # if 0, logging is off
-        },
+        logging_config=LoggingConfig(
+            sim_name=track, results_dir="results", log_every_nth_iter=0
+        ),
     )
 
     model_config = SimpleVehicleOnTrack.get_recursive_default_model_config()

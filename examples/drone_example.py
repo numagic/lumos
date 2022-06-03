@@ -1,6 +1,6 @@
 import logging
 import numpy as np
-
+from lumos.optimal_control.config import LoggingConfig
 from lumos.simulations.drone_simulation import DroneSimulation
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,9 @@ def main():
             backend="casadi",
             transcription="LGR",
             is_condensed=False,
+            logging_config=LoggingConfig(
+                sim_name="drone", results_dir="results", log_every_nth_iter=0
+            ),
         )
     )
 
