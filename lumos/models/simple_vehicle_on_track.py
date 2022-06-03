@@ -8,9 +8,9 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
 
 # Combine the signals to create the names. TODO: can we make it more automatic?
 @state_space_io(
-    states=TrackPosition2D.get_cls_group_names("states")
-    + SimpleVehicle.get_cls_group_names("states"),
-    inputs=SimpleVehicle.get_cls_group_names("inputs")
+    states=TrackPosition2D.get_direct_group_names("states")
+    + SimpleVehicle.get_direct_group_names("states"),
+    inputs=SimpleVehicle.get_direct_group_names("inputs")
     + ("track_curvature", "track_heading"),
     con_outputs=(
         "vehicle.slip_ratio_fl",
@@ -22,8 +22,8 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
         "vehicle.slip_angle_rl",
         "vehicle.slip_angle_rr",
     ),
-    residuals=TrackPosition2D.get_cls_group_names("residuals")
-    + SimpleVehicle.get_cls_group_names("residuals"),
+    residuals=TrackPosition2D.get_direct_group_names("residuals")
+    + SimpleVehicle.get_direct_group_names("residuals"),
 )
 class SimpleVehicleOnTrack(StateSpaceModel):
     _submodel_names = ("vehicle", "kinematics")
@@ -39,23 +39,9 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             "kinematics": "TrackPosition2D",
         }
 
-    def forward(
-        self,
-        states: lnp.ndarray,
-        inputs: lnp.ndarray,
-        mesh: float = 0.0,
-        params: Optional[Dict[str, Any]] = None,
-    ):
-        # TODO: since the distance is an essential input, we should NOT give it a
-        # default value to catch error, but params is ordered after it and needs a
-        # default
+    def forward(self, states: lnp.ndarray, inputs: lnp.ndarray, mesh: float):
 
         # Pick out the vehicle inputs
-        # FIXME: we had a bug earlier here where the whole inputs are passed to the
-        # vehicle (so larger size) yet eveything still works. In fact if the larger
-        # vector passed in has the small vector as the first sub-vecotr, then it would
-        # work --> this is very dangerous as it just runs away silently with wrong
-        # input size.
         vehicle_inputs = {
             k: inputs[k] for k in self.get_submodel("vehicle").get_group_names("inputs")
         }
@@ -91,12 +77,6 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             states=kinematic_states, inputs=kinematic_inputs, mesh=mesh,
         )
 
-        # Assemble final outputs
-        # NOTE: it's difficult to know which element of the big flat signal needs to
-        # come from the outputs of which submodel
-        # Hardcoded order for now! -> this should be consistent with the model names
-        # ordering when the are created
-
         # Convert to distance domain derivatives
         dt_ds = kinematics_return.states_dot["time"]
         states_dot = {
@@ -104,6 +84,7 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             **{k: v * dt_ds for k, v in vehicle_return.states_dot.items()},
         }
 
+        # Assemble final outputs
         outputs = self.combine_submodel_outputs(
             vehicle=vehicle_return.outputs, kinematics=kinematics_return.outputs
         )

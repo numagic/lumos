@@ -39,8 +39,8 @@ class GPAero(AeroModel):
         # we might want to make the I/O names dynamic that are only defined after the
         # object is instantiated (for example, passing all submodel outputs as a part of
         # parent model outputs)
-        num_inputs = len(cls.get_cls_group_names("inputs"))
-        num_outputs = len(cls.get_cls_group_names("outputs"))
+        num_inputs = len(cls.get_direct_group_names("inputs"))
+        num_outputs = len(cls.get_direct_group_names("outputs"))
         return {
             "gp_points": np.random.randn(cls.num_points, num_inputs),
             "alpha": np.random.randn(num_outputs, cls.num_points),
@@ -75,8 +75,8 @@ class MLPAero(AeroModel):
 
     @classmethod
     def get_default_params(cls):
-        num_inputs = len(cls.get_cls_group_names("inputs"))
-        num_outputs = len(cls.get_cls_group_names("outputs"))
+        num_inputs = len(cls.get_direct_group_names("inputs"))
+        num_outputs = len(cls.get_direct_group_names("outputs"))
 
         layers_dim = [cls.layer_dim] * cls.num_layers
         ins = [num_inputs] + layers_dim[:-1]

@@ -174,8 +174,8 @@ class BaseStateSpaceModelTest(BaseModelTest):
 
         # Ensure we don't modify the initial states
         states = dict(init_states)
-        for _ in range(num_steps):
-            model_return = self.model.forward(states, inputs)
+        for step in range(num_steps):
+            model_return = self.model.forward(states, inputs, step * time_step)
             for k in states:
                 states[k] += model_return.states_dot[k] * time_step
 

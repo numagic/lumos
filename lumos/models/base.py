@@ -18,7 +18,7 @@ from lumos.optimal_control.nlp import CasConstraints, JaxConstraints
 logger = logging.getLogger(__name__)
 
 
-# Convert from arrays to dictionary
+# Convert from names and arrays to dictionary
 def _array_to_dict(names, values):
     # We could do dict(zip(names, values)), but unfortunately this does NOT work
     # for casadi as casadi matrices are designed to be non-iterable
@@ -26,6 +26,10 @@ def _array_to_dict(names, values):
     return {name: values[idx] for idx, name in enumerate(names)}
 
 
+# We use namedtuple to make the io names immutable after generation. They will be used
+# for two types of names:
+# the direct names: which are fully defined by the model itself
+# the 'names': which is the eventual IO taking into consideration submodels and etc.
 ModelIO = namedtuple("BaseIO", ("inputs", "outputs", "residuals"))
 StateSpaceIO = namedtuple(
     "StateSpaceIO",
@@ -39,7 +43,7 @@ def model_io(
     """Decorator to set the input and output names of a stateless model."""
 
     def wrapper(cls):
-        cls.names = ModelIO(inputs=inputs, outputs=outputs, residuals=residuals)
+        cls._direct_names = ModelIO(inputs=inputs, outputs=outputs, residuals=residuals)
         return cls
 
     return wrapper
@@ -64,9 +68,9 @@ def state_space_io(
                 "StateSpaceModel. Use model_io for other models"
             )
 
-        cls.names = StateSpaceIO(
+        cls._direct_names = StateSpaceIO(
             states=states,
-            states_dot=states,
+            states_dot=states,  # use the same name as states for the states_dot
             inputs=inputs,
             outputs=outputs,
             con_outputs=con_outputs,
@@ -88,9 +92,6 @@ class ModelReturn(NamedTuple):
 class StateSpaceModelReturn(NamedTuple):
     """Return data structure for state space model."""
 
-    # NOTE: we use np empty array instead of lnp.array([]) here because the type is
-    # not really affected by user backend choice as it's determined already during the
-    # import time as the default values.
     states_dot: Dict = {}
     outputs: Dict = {}
     con_outputs: Dict = {}
@@ -99,9 +100,6 @@ class StateSpaceModelReturn(NamedTuple):
 
 class Model(CompositeModel):
     """Abstract class for mathematical models of the simplest form."""
-
-    # Names of variables in each group.
-    names: Dict[str, Tuple[str, ...]]
 
     # parameters of the model.
     # TODO: need to constrain this more.
@@ -117,12 +115,10 @@ class Model(CompositeModel):
 
         # automatically collect children outputs and add them to the parent outputs with
         # structure
-        children_outputs = tuple(self._collect_children_outputs())
 
-        # HACK: namedtuples are immutable
-        self.names = self.names._replace(outputs=self.names.outputs + children_outputs)
-
-        pass
+        # Build instance specific name attributes
+        self._construct_io_names()
+        print(f"{type(self)} has combined outputs: {self.names.outputs}")
 
     @abstractmethod
     def forward(self, *args, **kwargs):
@@ -141,6 +137,16 @@ class Model(CompositeModel):
         self.set_recursive_params(params)
         return self.forward_with_array(inputs)
 
+    def _construct_io_names(self):
+        """Create model io names while also taking into account submodels compositoin"""
+
+        self.names = ModelIO(
+            inputs=self._direct_names.inputs,
+            residuals=self._direct_names.residuals,
+            outputs=self._direct_names.outputs
+            + tuple(self._collect_children_outputs()),
+        )
+
     def _collect_children_outputs(self):
         children_outputs = []
         if not self.is_leaf():
@@ -148,7 +154,6 @@ class Model(CompositeModel):
                 children_outputs += [
                     submodel_name + "." + n for n in model.names.outputs
                 ]
-
         return children_outputs
 
     def combine_submodel_outputs(self, **kwargs):
@@ -166,10 +171,10 @@ class Model(CompositeModel):
         return combined_dict
 
     @classmethod
-    def get_cls_group_names(cls, group: str) -> Tuple[str, ...]:
-        """Return the names of variables inside an IO group."""
+    def get_direct_group_names(cls, group: str) -> Tuple[str, ...]:
+        """Return the direct names of variables inside an IO group."""
 
-        return getattr(cls.names, group)
+        return getattr(cls._direct_names, group)
 
     def get_group_names(self, group: str) -> Tuple[str, ...]:
         """Return the names of variables inside an IO group."""
@@ -339,12 +344,28 @@ class StateSpaceModel(Model):
         kwargs = {"states_dot": states_dot}
         if outputs is not None:
             kwargs["outputs"] = outputs
-            kwargs["con_outputs"] = self._extract_con_outputs(outputs)
 
         if residuals is not None:
             kwargs["residuals"] = residuals
 
         return StateSpaceModelReturn(**kwargs)
+
+    def _construct_io_names(self):
+        """Create model io names while also taking into account submodels compositoin.
+        
+        Similar to Model._construct_io_names, but now needs to operate on more groups
+        for state space model.
+        """
+
+        self.names = StateSpaceIO(
+            inputs=self._direct_names.inputs,
+            states=self._direct_names.states,
+            states_dot=self._direct_names.states_dot,
+            con_outputs=self._direct_names.con_outputs,
+            residuals=self._direct_names.residuals,
+            outputs=self._direct_names.outputs
+            + tuple(self._collect_children_outputs()),
+        )
 
     def _check_names(self):
         # Ensure con_outputs all exist
@@ -352,7 +373,7 @@ class StateSpaceModel(Model):
             if c not in self.get_group_names("outputs"):
                 raise ValueError(f"constraint outputs {c} not found in outputs")
 
-    def _extract_con_outputs(self, outputs: lnp.ndarray) -> lnp.ndarray:
+    def _extract_con_outputs(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
         return {c: outputs[c] for c in self.get_group_names("con_outputs")}
 
     @property
@@ -380,7 +401,12 @@ class StateSpaceModel(Model):
         kwargs = {
             g: self.make_vector(g, **getattr(model_return, g))
             for g in model_return._fields
+            if g != "con_outputs"
         }
+
+        kwargs["con_outputs"] = self.make_vector(
+            "con_outputs", **self._extract_con_outputs(model_return.outputs)
+        )
 
         return StateSpaceModelReturn(**kwargs)
 
