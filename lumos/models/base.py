@@ -157,12 +157,13 @@ class Model(CompositeModel):
 
         self.names = ModelIO(
             inputs=self._direct_names.inputs,
-            residuals=self._direct_names.residuals,
+            residuals=self._direct_names.residuals
+            + tuple(self._collect_submodel_group_names("residuals")),
             outputs=self._direct_names.outputs
-            + tuple(self._collect_children_outputs()),
+            + tuple(self._collect_submodel_group_names("outputs")),
         )
 
-    def _collect_children_outputs(self):
+    def _collect_submodel_group_names(self, group: str):
         """Collect all children outputs and prefix them with submodel_name
         
         
@@ -171,21 +172,27 @@ class Model(CompositeModel):
         children_outputs = []
         if not self.is_leaf():
             for submodel_name, model in self._submodels.items():
+                if not isinstance(model, StateSpaceModel) and group in [
+                    "states",
+                    "states_dot",
+                ]:
+                    # For non state-space model, we don't have the states and states_dot groups
+                    continue
                 children_outputs += [
-                    submodel_name + "." + n for n in model.names.outputs
+                    submodel_name + "." + n for n in model.get_group_names(group)
                 ]
         return children_outputs
 
-    def combine_submodel_outputs(self, **kwargs):
-        """combine the outputs from submodels into large dictionary
+    def combine_submodel_groups(self, **kwargs):
+        """combine the groups from submodels into large dictionary
         
-        kwargs: {name_of_submodel: vector_of_outputs}
+        kwargs: {name_of_submodel: dict_of_name_and_values}
         """
         combined_dict = {}
-        for submodel_name, submodel_outputs in kwargs.items():
+        for submodel_name, submodel_group in kwargs.items():
             # TODO: maybe we could convert the following to a helper method?
             combined_dict.update(
-                {submodel_name + "." + n: v for n, v in submodel_outputs.items()}
+                {submodel_name + "." + n: v for n, v in submodel_group.items()}
             )
 
         return combined_dict
@@ -379,12 +386,15 @@ class StateSpaceModel(Model):
 
         self.names = StateSpaceIO(
             inputs=self._direct_names.inputs,
-            states=self._direct_names.states,
-            states_dot=self._direct_names.states_dot,
+            states=self._direct_names.states
+            + tuple(self._collect_submodel_group_names("states")),
+            states_dot=self._direct_names.states
+            + tuple(self._collect_submodel_group_names("states")),
             con_outputs=self._direct_names.con_outputs,
-            residuals=self._direct_names.residuals,
+            residuals=self._direct_names.residuals
+            + tuple(self._collect_submodel_group_names("residuals")),
             outputs=self._direct_names.outputs
-            + tuple(self._collect_children_outputs()),
+            + tuple(self._collect_submodel_group_names("outputs")),
         )
 
     def _check_names(self):

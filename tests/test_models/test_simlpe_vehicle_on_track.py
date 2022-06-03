@@ -16,19 +16,20 @@ class TestSimpleVehicleOnTrack(BaseStateSpaceModelTest, unittest.TestCase):
         # FIXME: this is really bad. How do we get the rolling radius estimate?
         no_slip_omega = vx / 0.33
 
-        return self.model.make_dict(
-            group="states",
-            time=0,
-            n=0,
-            eta=0,
-            vx=vx,
-            vy=vy,
-            yaw_rate=yaw_rate,
-            wheel_speed_fl=no_slip_omega,
-            wheel_speed_fr=no_slip_omega,
-            wheel_speed_rl=no_slip_omega,
-            wheel_speed_rr=no_slip_omega,
-        )
+        # HACK: since we now have hierarchical name: vehicle.vx, the kwargs way of
+        # construction no longer works as vehicle.vx is not a legal keyword!
+        return {
+            "kinematics.time": 0,
+            "kinematics.n": 0,
+            "kinematics.eta": 0,
+            "vehicle.vx": vx,
+            "vehicle.vy": vy,
+            "vehicle.yaw_rate": yaw_rate,
+            "vehicle.wheel_speed_fl": no_slip_omega,
+            "vehicle.wheel_speed_fr": no_slip_omega,
+            "vehicle.wheel_speed_rl": no_slip_omega,
+            "vehicle.wheel_speed_rr": no_slip_omega,
+        }
 
     def test_turn_left(self):
         init_states = self._get_initial_states()
@@ -46,8 +47,8 @@ class TestSimpleVehicleOnTrack(BaseStateSpaceModelTest, unittest.TestCase):
         model_return = self.model.forward(init_states, inputs, mesh=0.0)
 
         # should directly get +ve lateral acceleration, +ve yaw acceleration and derivative of vy
-        self.assertGreater(model_return.states_dot["vy"], 0)
-        self.assertGreater(model_return.states_dot["yaw_rate"], 0)
+        self.assertGreater(model_return.states_dot["vehicle.vy"], 0)
+        self.assertGreater(model_return.states_dot["vehicle.yaw_rate"], 0)
         self.assertGreater(model_return.outputs["vehicle.ay"], 0)
 
         # After a few timesteps:
@@ -60,9 +61,9 @@ class TestSimpleVehicleOnTrack(BaseStateSpaceModelTest, unittest.TestCase):
 
         states, outputs = self._forward_euler(init_states, inputs, dist_step, num_steps)
 
-        self.assertLess(states["vx"], init_states["vx"])
-        self.assertLess(states["vy"], 0)
-        self.assertGreater(states["yaw_rate"], 0)
+        self.assertLess(states["vehicle.vx"], init_states["vehicle.vx"])
+        self.assertLess(states["vehicle.vy"], 0)
+        self.assertGreater(states["vehicle.yaw_rate"], 0)
 
         # Assert position states
         self.assertGreater(
@@ -72,19 +73,19 @@ class TestSimpleVehicleOnTrack(BaseStateSpaceModelTest, unittest.TestCase):
         )
 
         self.assertGreater(
-            states["n"],
+            states["kinematics.n"],
             0,
             msg="Distance across should be positive for turning left on straightline track",
         )
 
         self.assertGreater(
-            states["time"],
+            states["kinematics.time"],
             0,
             msg="Time used should be positive for turning left on straightline track",
         )
 
         self.assertLess(
             dist_step * num_steps,
-            init_states["vx"] * dist_step * num_steps,
+            init_states["vehicle.vx"] * dist_step * num_steps,
             msg="Distance travelled should be less than going straight from the start",
         )
