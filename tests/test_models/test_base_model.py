@@ -171,7 +171,7 @@ AY = 8.0
 @state_space_io(
     states=("vx", "vy"), inputs=("throttle", "steer", "brake"), outputs=("ax", "ay"),
 )
-class TestVehicle(StateSpaceModel):
+class VehicleForTest(StateSpaceModel):
     _submodel_names = ("powertrain", "tire")
 
     @classmethod
@@ -290,7 +290,7 @@ class SimpleEngineWithNoOutputs(Model):
 
 class TestOutputsCollection(unittest.TestCase):
     types = [
-        TestVehicle,
+        VehicleForTest,
         HybridPowertrain,
         MF72,
         SimpleEMotor,
@@ -309,13 +309,13 @@ class TestOutputsCollection(unittest.TestCase):
             ModelMaker.remove_from_registry(model_type)
 
     def test_output_names_are_correctly_setup_after_constructions(self):
-        base_config = ModelMaker.make_config("TestVehicle")
+        base_config = ModelMaker.make_config("VehicleForTest")
         base_model = ModelMaker.make_model_from_config(base_config)
 
         self.assertIn("powertrain.engine.power", base_model.names.outputs)
 
         # Make sure things still work when some model doesn't have an output
-        variant1_config = ModelMaker.make_config("TestVehicle")
+        variant1_config = ModelMaker.make_config("VehicleForTest")
         variant1_config.replace_subtree(
             "powertrain.engine", ModelMaker.make_config("SimpleEngineWithNoOutputs")
         )
@@ -330,7 +330,7 @@ class TestOutputsCollection(unittest.TestCase):
         )
 
     def test_output_values_are_correctly_set_after_execution(self):
-        base_config = ModelMaker.make_config("TestVehicle")
+        base_config = ModelMaker.make_config("VehicleForTest")
         base_model = ModelMaker.make_model_from_config(base_config)
 
         states = base_model.make_const_dict("states", 0.1)

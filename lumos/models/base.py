@@ -98,6 +98,25 @@ class StateSpaceModelReturn(NamedTuple):
     residuals: Dict = {}
 
 
+class ArrayModelReturn(NamedTuple):
+    """Return data structure for a static model in array forms."""
+
+    outputs: lnp.ndarray = np.array([])
+    residuals: lnp.ndarray = np.array([])
+
+
+class ArrayStateSpaceModelReturn(NamedTuple):
+    """Return data structure for state space model in array forms."""
+
+    # NOTE: we use np empty array instead of lnp.array([]) here because the type is
+    # not really affected by user backend choice as it's determined already during the
+    # import time as the default values.
+    states_dot: lnp.ndarray = np.array([])
+    outputs: lnp.ndarray = np.array([])
+    con_outputs: lnp.ndarray = np.array([])
+    residuals: lnp.ndarray = np.array([])
+
+
 class Model(CompositeModel):
     """Abstract class for mathematical models of the simplest form."""
 
@@ -113,12 +132,8 @@ class Model(CompositeModel):
     ):
         super().__init__(model_config=model_config, params=params)
 
-        # automatically collect children outputs and add them to the parent outputs with
-        # structure
-
         # Build instance specific name attributes
         self._construct_io_names()
-        print(f"{type(self)} has combined outputs: {self.names.outputs}")
 
     @abstractmethod
     def forward(self, *args, **kwargs):
@@ -148,6 +163,11 @@ class Model(CompositeModel):
         )
 
     def _collect_children_outputs(self):
+        """Collect all children outputs and prefix them with submodel_name
+        
+        
+        eg: the 'power' output of the 'engine' submodel becomes 'engine.power'
+        """
         children_outputs = []
         if not self.is_leaf():
             for submodel_name, model in self._submodels.items():
@@ -224,7 +244,7 @@ class Model(CompositeModel):
             for g in model_return._fields
         }
 
-        return ModelReturn(**kwargs)
+        return ArrayModelReturn(**kwargs)
 
     @property
     def num_inputs(self):
@@ -278,13 +298,13 @@ class Model(CompositeModel):
         """Create a dictionary from kwargs. All values must be provided.
         
         This is actually just a thing wrapper on the standard dictionary construction,
-        but it additionally checks if all the necessary keys exist.
-        
+        but it additionally checks if all the necessary keys exist
         """
         self._check_keys(group, kwargs)
         return kwargs
 
     def make_const_dict(self, group, value: float) -> Dict[str, Any]:
+        """Create a dictionary for a group filled with constant values."""
         return {n: value for n in self.get_group_names(group)}
 
     def plot(self, *args, **kwargs):
@@ -408,7 +428,7 @@ class StateSpaceModel(Model):
             "con_outputs", **self._extract_con_outputs(model_return.outputs)
         )
 
-        return StateSpaceModelReturn(**kwargs)
+        return ArrayStateSpaceModelReturn(**kwargs)
 
     def implicit(
         self,
