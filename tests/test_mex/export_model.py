@@ -39,7 +39,7 @@ def export_c_mex_and_data():
         {"states": states, "inputs": inputs, "mesh": mesh, "params": flat_params}
     )
 
-    sio.savemat("forward_data.mat", export_dict)
+    sio.savemat("forward.mat", export_dict)
 
     pass
 

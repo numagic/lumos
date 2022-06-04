@@ -2,7 +2,7 @@ disp("compiling mex function ...")
 mex forward.c -DMATLAB_MEX_FILE
 
 disp("loading test data ...")
-data = load("forward_data.mat");
+data = load("forward.mat");
 
 disp("executing model with test data ...")
 [states_dot, outputs, con_outputs, residuals] = forward(data.states, data.inputs, data.mesh, data.params);
