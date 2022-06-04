@@ -759,7 +759,8 @@ class StateSpaceModel(Model):
             **implicit_functions,
         )
 
-    def export_c_mex(self, CasType: type = cas.MX):
+    def export_c_mex(self, cfile: str, CasType: type = cas.MX):
+        # FIXME: path management, currently local directory only
         params = self.get_recursive_params()
         flat_params, unravel = params.tree_ravel()
 
@@ -777,9 +778,6 @@ class StateSpaceModel(Model):
             )
 
         # Generate code
-        filename = "forward"
-        cfile = filename + ".c"
-        # FIXME: path management, currently local directory only
         codegen = cas.CodeGenerator(cfile, dict(mex=True, main=True))
 
         codegen.add(

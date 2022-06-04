@@ -17,53 +17,58 @@ jobs:
     outputs:
       key: ${{ steps.generate-key.outputs.key}}
     steps:
-    - name: Generate key
-      id: generate-key
-      run: |
-        echo "::set-output name=key::${{ github.run_id }}-${{ github.run_attempt }}"
-      shell: bash
-    - uses: actions/checkout@v2
-    - run: |
-        mkdir tmp
-        date > tmp/hello.txt
-    - uses: actions/cache@v2
-      env:
-        cache-name: cache-generated-code
-      with:
-        path: tmp
-        key: ${{ steps.generate-key.outputs.key }}
+      - name: Generate key
+        id: generate-key
+        run: |
+          echo "::set-output name=key::${{ github.run_id }}-${{ github.run_attempt }}"
+        shell: bash
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.9
+          auto-update-conda: true
+          environment-file: environment.yml
+      - name: Generate code
+        shell: bash -l {0}
+        run: |
+          python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
+          python3 tests/test_mex/export_model.py 
+          mkdir tmp
+          mv forward.c forward_data.mat tmp/.
+      - uses: actions/cache@v2
+        env:
+          cache-name: cache-generated-code
+        with:
+          path: tmp
+          key: ${{ steps.generate-key.outputs.key }}
 
   compile_and_run_on_linux:
     runs-on: ubuntu-latest
     needs: generate_code
     steps:
-    - uses: actions/checkout@v2
-    - id: restore-cached-generated-code
-      uses: actions/cache@v2
-      with:
-        path: tmp
-        key: ${{ needs.generate_code.outputs.key }}
-    - run: |
-        ls
-        ls tmp
-        cat tmp/hello.txt
-        sudo apt -yq update
-        sudo apt install -yq --no-install-recommends octave        
-    - run: octave --eval "assert(3.0, 3.1, tol=1e-6)"
-
+      - uses: actions/checkout@v2
+      - id: restore-cached-generated-code
+        uses: actions/cache@v2
+        with:
+          path: tmp
+          key: ${{ needs.generate_code.outputs.key }}
+      - run: |
+          sudo apt -yq update
+          sudo apt install -yq --no-install-recommends octave        
+      - run: |
+          cd tmp
+          octave ../tests/test_mex/compile_mex_and_run.m 
   compile_and_run_on_windows:
     runs-on: windows-latest
     needs: generate_code
     steps: 
-    - uses: actions/checkout@v2
-    - id: restore-cached-generated-code
-      uses: actions/cache@v2
-      with:
-        path: tmp
-        key: ${{ needs.generate_code.outputs.key }}
-    - run: |
-        ls
-        ls tmp
-        cat tmp/hello.txt
-    - run: choco install octave.portable
-    - run: octave --eval "disp(3.0*1.0)"
+      - uses: actions/checkout@v2
+      - id: restore-cached-generated-code
+        uses: actions/cache@v2
+        with:
+          path: tmp
+          key: ${{ needs.generate_code.outputs.key }}
+      - run: choco install octave.portable
+      - run: |
+          cd tmp
+          octave ../tests/test_mex/compile_mex_and_run.m 
