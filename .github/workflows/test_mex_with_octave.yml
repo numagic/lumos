@@ -56,7 +56,7 @@ jobs:
           key: ${{ needs.generate_code.outputs.key }}
       - run: |
           sudo apt -yq update
-          sudo apt install -yq --no-install-recommends octave        
+          sudo apt install -yq --no-install-recommends octave liboctave-dev        
       - run: |
           cp tests/test_mex/compile_mex_and_run.m tmp/.
           cd tmp
