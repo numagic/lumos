@@ -65,7 +65,7 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: ${{ needs.generate_code.outputs.artifact-name }}
-      - run: octave tests/test_mex/compile_mex_and_run.m ${{ needs.generate_code.outputs.file-name }}
+      - run: octave-cli tests/test_mex/compile_mex_and_run.m ${{ needs.generate_code.outputs.file-name }}
 
   compile_and_run_on_windows:
     runs-on: windows-latest
@@ -77,4 +77,9 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: ${{ needs.generate_code.outputs.artifact-name }}
-      - run: octave tests/test_mex/compile_mex_and_run.m ${{ needs.generate_code.outputs.file-name }}
+      # On windows, 'octave' seems to dispatch into a different process, while the
+      # the current process would exist with status 0 immediately...
+      - run: |
+          set -eo pipefail
+          octave-cli "tests\test_mex\compile_mex_and_run.m" ${{ needs.generate_code.outputs.file-name }}
+        shell: bash
