@@ -723,16 +723,16 @@ class StateSpaceModel(Model):
             p.wait()
 
         # Wrap the functions to take in dict params
+        # FIXME: fixed thread number
+        _mapped_forward = lnp.cmap(
+            cas.external("forward", library_path),
+            num_workers=32,
+            in_axes=[0, 0, 0, None],
+        )
+
         def cas_batched_forward(_states, _inputs, _mesh, _params):
             _flat_params, _ = _params.tree_ravel()
-
-            # FIXME: fixed thread number
-            out = lnp.cmap(
-                cas.external("forward", library_path),
-                num_workers=32,
-                in_axes=[0, 0, 0, None],
-            )(_states, _inputs, _mesh, _flat_params)
-
+            out = _mapped_forward(_states, _inputs, _mesh, _flat_params)
             return StateSpaceModelReturn(*out)
 
         self._batched_forward = cas_batched_forward
