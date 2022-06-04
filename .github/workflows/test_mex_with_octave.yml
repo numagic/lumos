@@ -57,7 +57,7 @@ jobs:
           sudo apt install -yq --no-install-recommends octave        
       - run: |
           cd tmp
-          octave ../tests/test_mex/compile_mex_and_run.m 
+          octave-cli ../tests/test_mex/compile_mex_and_run.m 
   compile_and_run_on_windows:
     runs-on: windows-latest
     needs: generate_code
@@ -71,4 +71,4 @@ jobs:
       - run: choco install octave.portable
       - run: |
           cd tmp
-          octave ../tests/test_mex/compile_mex_and_run.m 
+          octave-cli ../tests/test_mex/compile_mex_and_run.m 
