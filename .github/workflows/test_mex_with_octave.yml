@@ -1,0 +1,29 @@
+name: test-mex-with-octave
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    # by default only opened, synchronize and reopened activity would trigger this event
+    # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
+    # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+    branches:
+      - 'main'
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - run: |
+        sudo apt -yq update
+        sudo apt install -yq --no-install-recommends octave        
+    - run: octave --eval "disp(3.0*1.0)"
+
+  windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - run: choco install octave.portable
+    - run: octave --eval "disp(3.0*1.0)"
