@@ -80,6 +80,5 @@ jobs:
       # On windows, 'octave' seems to dispatch into a different process, while the
       # the current process would exist with status 0 immediately...
       - run: |
-          set -eo pipefail
           octave-cli "tests\test_mex\compile_mex_and_run.m" ${{ needs.generate_code.outputs.file-name }}
         shell: bash
