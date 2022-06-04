@@ -19,7 +19,7 @@ jobs:
     - run: |
         sudo apt -yq update
         sudo apt install -yq --no-install-recommends octave        
-    - run: octave --eval "disp(3.0*1.0)"
+    - run: octave --eval "disp(3.0*1.0"
 
   windows:
     runs-on: windows-latest
