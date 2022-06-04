@@ -1,8 +1,15 @@
+args = argv();
+
+c_file = sprintf("%s.c", args{1});
+data_file = sprintf("%s.mat", args{1});
+
+fprintf("compiling %s and testing with %s\n", c_file, data_file)
 disp("compiling mex function ...")
-mex forward.c -DMATLAB_MEX_FILE
+cmd_str = sprintf("mex %s -DMATLAB_MEX_FILE", c_file);
+eval(cmd_str);
 
 disp("loading test data ...")
-data = load("forward.mat");
+data = load(data_file);
 
 disp("executing model with test data ...")
 [states_dot, outputs, con_outputs, residuals] = forward(data.states, data.inputs, data.mesh, data.params);

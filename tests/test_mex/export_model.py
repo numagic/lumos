@@ -1,13 +1,15 @@
+import sys
+
 import scipy.io as sio
 from lumos.models.composition import ModelMaker
 
 
-def export_c_mex_and_data():
+def export_c_mex_and_data(file_name: str):
     # Create the model
     model = ModelMaker.make_model_from_name("SimpleVehicle")
 
     # Export c-code
-    model.export_c_mex("forward.c")
+    model.export_c_mex(f"{file_name}.c")
 
     # Export some data that can be used for testing (to check if execution in mex gives
     # the same results as in python)
@@ -39,10 +41,12 @@ def export_c_mex_and_data():
         {"states": states, "inputs": inputs, "mesh": mesh, "params": flat_params}
     )
 
-    sio.savemat("forward.mat", export_dict)
+    sio.savemat(f"{file_name}.mat", export_dict)
 
     pass
 
 
 if __name__ == "__main__":
-    export_c_mex_and_data()
+    # Takes 1 commandline input for the file name
+    # sys.argv is what follows 'python3'
+    export_c_mex_and_data(sys.argv[1])
