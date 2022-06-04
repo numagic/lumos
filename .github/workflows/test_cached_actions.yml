@@ -12,54 +12,9 @@ on:
       - 'main'
 
 jobs:
-  generate_code:
-    runs-on: ubuntu-latest
-    outputs:
-      aritifact-name: ${{ steps.generate-artifact-name.outputs.aritifact-name}}
-    steps:
-      - name: Generate artifact name
-        # We want to share the generated code between jobs of the same commit, but not
-        # between commits, therefore we need to generate unique keys.
-        id: generate-artifact-name
-        run: |
-          echo "::set-output name=aritifact-name::codegen-${{ github.run_id }}-${{ github.run_attempt }}"
-        shell: bash
-      - uses: actions/checkout@v2
-      - name: Generate code
-        shell: bash -l {0}
-        run: |
-          python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
-          python3 tests/test_mex/export_model.py 
-          mkdir tmp
-          echo "some code" > forward.c
-          echo "some data" > forward_data.mat
-      - name: Upload math result for job 1
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ steps.generate-artifact-name.outputs.aritifact-name }}
-          path: |
-            forward.c
-            forward_data.mat
-
-  compile_and_run_on_linux:
-    runs-on: ubuntu-latest
-    needs: generate_code
-    steps:
-      - uses: actions/download-artifact@v3
-        with:
-          name: ${{ needs.generate_code.outputs.aritifact-name }}   
-      - run: |
-          ls
-          cat forward.c
-          cat forward_data.mat
-  compile_and_run_on_windows:
+  test_assert_on_windows:
     runs-on: windows-latest
-    needs: generate_code
     steps:
-      - uses: actions/download-artifact@v3
-        with:
-          name: ${{ needs.generate_code.outputs.aritifact-name }}   
       - run: |
-          ls
-          cat forward.c
-          cat forward_data.mat
+          choco install octave.portable
+          octave --eval "assert(3.0, 3.1)"
