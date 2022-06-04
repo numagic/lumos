@@ -18,6 +18,8 @@ jobs:
       key: ${{ steps.generate-key.outputs.key}}
     steps:
       - name: Generate key
+        # We want to share the generated code between jobs of the same commit, but not
+        # between commits, therefore we need to generate unique keys.
         id: generate-key
         run: |
           echo "::set-output name=key::${{ github.run_id }}-${{ github.run_attempt }}"
@@ -56,8 +58,9 @@ jobs:
           sudo apt -yq update
           sudo apt install -yq --no-install-recommends octave        
       - run: |
+          cp tests/test_mex/compile_mex_and_run.m tmp/.
           cd tmp
-          octave-cli ../tests/test_mex/compile_mex_and_run.m 
+          octave --eval "compile_mex_and_run"
   compile_and_run_on_windows:
     runs-on: windows-latest
     needs: generate_code
@@ -70,5 +73,6 @@ jobs:
           key: ${{ needs.generate_code.outputs.key }}
       - run: choco install octave.portable
       - run: |
+          cp tests/test_mex/compile_mex_and_run.m tmp/.
           cd tmp
-          octave-cli ../tests/test_mex/compile_mex_and_run.m 
+          octave --eval "compile_mex_and_run"
