@@ -1,0 +1,63 @@
+name: test-cache-action
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    # by default only opened, synchronize and reopened activity would trigger this event
+    # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
+    # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+    branches:
+      - 'main'
+
+jobs:
+  generate_code:
+    runs-on: ubuntu-latest
+    outputs:
+      key: ${{ steps.generate-key.outputs.key}}
+    steps:
+      - name: Generate key
+        # We want to share the generated code between jobs of the same commit, but not
+        # between commits, therefore we need to generate unique keys.
+        id: generate-key
+        run: |
+          echo "::set-output name=key::${{ github.run_id }}-${{ github.run_attempt }}"
+        shell: bash
+      - uses: actions/checkout@v2
+      - name: Generate code
+        shell: bash -l {0}
+        run: |
+          python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
+          python3 tests/test_mex/export_model.py 
+          mkdir tmp
+          echo "something" > tmp/hello.txt
+      - uses: actions/cache@v2
+        env:
+          cache-name: cache-generated-code
+        with:
+          path: tmp
+          key: ${{ steps.generate-key.outputs.key }}
+
+  compile_and_run_on_linux:
+    runs-on: ubuntu-latest
+    needs: generate_code
+    steps:
+      - uses: actions/checkout@v2
+      - id: restore-cached-generated-code
+        uses: actions/cache@v2
+        with:
+          path: tmp
+          key: ${{ needs.generate_code.outputs.key }}    
+      - run: cat tmp/hello.txt
+  compile_and_run_on_windows:
+    runs-on: windows-latest
+    needs: generate_code
+    steps: 
+      - uses: actions/checkout@v2
+      - id: restore-cached-generated-code
+        uses: actions/cache@v2
+        with:
+          path: tmp
+          key: ${{ needs.generate_code.outputs.key }}
+      - run: cat tmp/hello.txt
