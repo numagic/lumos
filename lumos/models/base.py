@@ -758,3 +758,42 @@ class StateSpaceModel(Model):
             num_con=self.num_implicit_res,
             **implicit_functions,
         )
+
+    def export_c_mex(self, CasType: type = cas.MX):
+        params = self.get_recursive_params()
+        flat_params, unravel = params.tree_ravel()
+
+        cas_flat_params = CasType.sym("params", len(flat_params))
+        cas_dict_params = unravel(cas_flat_params)
+
+        mesh = CasType.sym("distance")
+        states = CasType.sym("states", self.num_states)
+        inputs = CasType.sym("inputs", self.num_inputs)
+
+        # Only the model calls need to go inside the context manager.
+        with lnp.use_backend("casadi"):
+            model_return = self.apply_and_forward_with_arrays(
+                states, inputs, mesh, cas_dict_params
+            )
+
+        # Generate code
+        filename = "forward"
+        cfile = filename + ".c"
+        # FIXME: path management, currently local directory only
+        codegen = cas.CodeGenerator(cfile, dict(mex=True, main=True))
+
+        codegen.add(
+            cas.Function(
+                "forward", [states, inputs, mesh, cas_flat_params], [*model_return]
+            )
+        )
+
+        codegen.generate()
+
+        # Need to set the parameters back to the original params, as they were replaced
+        # with casadi variables during the apply_and_forward_with_arrays
+        # TODO: the same also happens to other casadi export and also jax tracing right?
+        # Can we generalize this problem?
+        self.set_recursive_params(params)
+
+        pass
