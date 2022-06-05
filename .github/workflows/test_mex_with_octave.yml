@@ -1,14 +1,14 @@
 name: test-mex-with-octave
+# Tests in linux, export a state-space model to c-code, and export saved I/O data.
+# Then in both linux and windows, compile the c-code into mex and executes it and tests
+# if outputs matches expected values.
 
 on:
   push:
     branches:
       - 'main'
   pull_request:
-    # by default only opened, synchronize and reopened activity would trigger this event
-    # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
-    # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
-    branches:
+     branches:
       - 'main'
 
 # NOTE: we use 'artifact' instead of 'cache' because cache is OS specific, meaning we
@@ -53,7 +53,7 @@ jobs:
             ${{ steps.generate-file-name.outputs.file-name}}.c
             ${{ steps.generate-file-name.outputs.file-name}}.mat
 
-  compile_and_run_on_linux:
+  compile_mex_and_run_on_linux:
     runs-on: ubuntu-latest
     needs: generate_code
     steps:
@@ -67,7 +67,7 @@ jobs:
           name: ${{ needs.generate_code.outputs.artifact-name }}
       - run: octave-cli tests/test_mex/compile_mex_and_run.m ${{ needs.generate_code.outputs.file-name }}
 
-  compile_and_run_on_windows:
+  compile_mex_and_run_on_windows:
     runs-on: windows-latest
     needs: generate_code
     steps:
@@ -79,6 +79,7 @@ jobs:
           name: ${{ needs.generate_code.outputs.artifact-name }}
       # On windows, 'octave' seems to dispatch into a different process, while the
       # the current process would exist with status 0 immediately...
+      # Also needs to use "" for path, otherwise it won't be parsed correctly.
       - run: |
           octave-cli "tests\test_mex\compile_mex_and_run.m" ${{ needs.generate_code.outputs.file-name }}
         shell: bash

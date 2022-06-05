@@ -5,6 +5,7 @@ from lumos.models.composition import ModelMaker
 
 
 def export_c_mex_and_data(file_name: str):
+    """Export a state space model as c-code and data from recorded I/O"""
     # Create the model
     model = ModelMaker.make_model_from_name("SimpleVehicle")
 
@@ -42,8 +43,6 @@ def export_c_mex_and_data(file_name: str):
     )
 
     sio.savemat(f"{file_name}.mat", export_dict)
-
-    pass
 
 
 if __name__ == "__main__":

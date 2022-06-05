@@ -760,7 +760,16 @@ class StateSpaceModel(Model):
         )
 
     def export_c_mex(self, cfile: str, CasType: type = cas.MX):
-        # FIXME: path management, currently local directory only
+        """Export a state space model into c-code that is ready for mex.
+
+        Args:
+            cfile (str): path of the c-file for export, includg .c extension. Limited to
+                current working directory only.
+            CasType (type, optional): casadi type to use, SX or MX. Defaults to MX.
+
+        """
+        # FIXME: path management, currently local directory only, which is a limitation
+        # that comes from casadi
         params = self.get_recursive_params()
         flat_params, unravel = params.tree_ravel()
 
@@ -793,5 +802,3 @@ class StateSpaceModel(Model):
         # TODO: the same also happens to other casadi export and also jax tracing right?
         # Can we generalize this problem?
         self.set_recursive_params(params)
-
-        pass
