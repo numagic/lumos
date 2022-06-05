@@ -762,6 +762,11 @@ class StateSpaceModel(Model):
     def export_c_mex(self, cfile: str, CasType: type = cas.MX):
         """Export a state space model into c-code that is ready for mex.
 
+        The exported function has the following API:
+
+        states_dot, outputs, con_outputs, residuals = function(states, inputs, mesh, params)
+        where each I/O is an array of the corresponding size.
+
         Args:
             cfile (str): path of the c-file for export, includg .c extension. Limited to
                 current working directory only.
