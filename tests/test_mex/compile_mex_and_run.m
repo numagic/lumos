@@ -1,7 +1,7 @@
 %% Compile exported c-code into mex, execute with saved inputs and compare to saved outputs
 
-% Takes one commandline input for the file_nameargs = argv();
-
+% Takes one commandline input for the file_name
+args = argv();
 
 c_file = sprintf("%s.c", args{1});
 data_file = sprintf("%s.mat", args{1});
