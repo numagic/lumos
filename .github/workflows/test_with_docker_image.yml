@@ -1,0 +1,202 @@
+name: test-with-docker-image
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    # by default only opened, synchronize and reopened activity would trigger this event
+    # see: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#pull_request
+    # and def on synchronize: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+    branches:
+      - 'main'
+
+jobs:
+  set-up-env-vars:
+    runs-on: ubuntu-latest
+    outputs:
+      feature_docker_base_version: ${{ steps.feature_docker_base_version.outputs.value}}
+      main_docker_base_version: ${{ steps.main_docker_base_version.outputs.value}}
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v2
+      - name: Read env vars from .env file
+        uses: christian-draeger/read-properties@1.0.1
+        id: feature_docker_base_version
+        with:
+          path: '.env'
+          property: LUMOS_DOCKER_BASE_VERSION  
+      - name: Checkout main branch
+        uses: actions/checkout@v2
+        with:
+          ref: main
+      - name: Read env vars from .env file
+        uses: christian-draeger/read-properties@1.0.1
+        id: main_docker_base_version
+        with:
+          path: '.env'
+          property: LUMOS_DOCKER_BASE_VERSION  
+  
+  # TODO: add action to check if certain files have changed to determine
+  # 1) if a rebuild is needed.
+  # 2) if the .env increment is done properly
+  # 3) if on master, we rebuild, and use the proper tag from .env
+  # see: https://github.com/tj-actions/changed-files
+  check-base-image-change:
+    runs-on: ubuntu-latest
+    needs:
+      - set-up-env-vars
+    outputs:
+      should_build_image: ${{ steps.check_base_image_file_changes.outputs.any_changed}}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+            # depth "2" would allow compare to preceding commit for the first commit in a new branch.
+            fetch-depth: 0
+      - name: Check image related files
+        id: check_base_image_file_changes
+        uses: tj-actions/changed-files@v10.1
+        with:
+          files: |
+            .env
+            environment.yml
+            docker/base/Dockerfile-base
+            docker/base/Dockerfile-ci
+            docker/docker-compose-build.yml
+
+  ensure-version-increment:
+    runs-on: ubuntu-latest
+    if: ${{ needs.check-base-image-change.outputs.should_build_image == 'true' }}
+    needs:
+      - set-up-env-vars
+      - check-base-image-change
+    steps:         
+      - name: Check image tag is incremented correctly if needed
+        shell: bash
+        run: |
+          set -euxo pipefail
+          
+          # compare version numbers: https://stackoverflow.com/a/29394504
+          # We don't pay too much attention here because the way we manage version
+          # is in any case flaky
+          function ver { printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' '); }
+
+          if [ ${{ needs.check-base-image-change.outputs.should_build_image }} ]; then
+            # image changed, version number incremented?            
+            if ! [ $(ver ${{ needs.set-up-env-vars.outputs.feature_docker_base_version}}) -gt $(ver ${{ needs.set-up-env-vars.outputs.main_docker_base_version}}) ]; then
+              echo 'Docker image needs to be rebuilt but version is not incremented!'
+              exit 1
+            fi
+          fi
+              
+  create-image-tag:
+    runs-on: ubuntu-latest
+    needs:
+      - set-up-env-vars
+    outputs:
+      image_tag: ${{ steps.set_image_tag.outputs.image_tag}}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set image tag
+        id: set_image_tag
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          # Get current branch name, encode with base64 and trim to 8 letters to use as image tag.
+          # Technical this is not the LUMOS_DOCKER_BASE_VERSION any more, but that env var is what is used in docker-compose
+          # export IMAGE_TAG="$(echo ${GITHUB_REF#refs/heads/} | base64 | cut -c -8)"
+
+          export IMAGE_TAG=${{ needs.set-up-env-vars.outputs.feature_docker_base_version }}
+          echo "::set-output name=image_tag::${IMAGE_TAG}"
+  
+
+  build-and-push-base-images:
+    if: ${{ needs.check-base-image-change.outputs.should_build_image == 'true' }}
+    runs-on: ubuntu-latest
+    needs:
+      - create-image-tag
+      - check-base-image-change
+      - ensure-version-increment
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io/numagic
+      # see: https://docs.docker.com/develop/develop-images/build_enhancements/
+      # https://www.docker.com/blog/faster-builds-in-compose-thanks-to-buildkit-support/
+      DOCKER_BUILDKIT: 1
+      COMPOSE_DOCKER_CLI_BUILD: 1
+      MAIN_BRANCH: main
+      # FIXME: hardcoded image name, should be consistent with docker-compose. Use .env?
+      BASE_IMAGE_NAME: lumos-base
+      CI_IMAGE_NAME: lumos-ci
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v2
+      - name: Docker login
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push images
+        id: build_images
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          export IMAGE_TAG=${{ needs.create-image-tag.outputs.image_tag }}
+          export NEW_BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:$IMAGE_TAG
+          export NEW_CI_IMAGE=${{ env.REGISTRY }}/${{ env.CI_IMAGE_NAME }}:$IMAGE_TAG
+
+          # This cache tag is used in docker-compose "cache_from". If cache is not found, build still won't fail, but will start from scratch.
+          export BASE_CACHE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:cache
+          export CI_CACHE_IMAGE=${{ env.REGISTRY }}/${{ env.CI_IMAGE_NAME }}:cache
+
+          # Also specify external cache source with BUILDKIT_INLINE_CACHE=1
+          # This makes it useable as external build cache source in the future
+          # See: https://docs.docker.com/engine/reference/commandline/build/
+          docker-compose --env-file .env -f docker/docker-compose-build.yml build --build-arg BUILDKIT_INLINE_CACHE=1
+
+          # Push new image
+          echo "Pushing base image..."
+          docker push $NEW_BASE_IMAGE
+
+          echo "Pushing ci image..."
+          docker push $NEW_CI_IMAGE
+
+          echo "Pushing cache tag..." 
+          # update cache         
+          docker tag $NEW_BASE_IMAGE $BASE_CACHE_IMAGE
+          docker push $BASE_CACHE_IMAGE
+          docker tag $NEW_CI_IMAGE $CI_CACHE_IMAGE
+          docker push $CI_CACHE_IMAGE          
+
+  # We want the unit test to depend on image build, but also executes when the image build is skipped.
+  # Using a pure "needs" is not sufficient.
+  # The solution is inspired by here: https://github.com/actions/runner/issues/491#issuecomment-850884422
+  run-unit-tests-with-docker-image:
+    runs-on: ubuntu-latest
+    needs: 
+      - create-image-tag
+      - build-and-push-base-images # also skip unit test if image version increment is done incorrectly
+      - ensure-version-increment
+    if: |
+      always() &&
+      (needs.build-and-push-base-images.result == 'success' || needs.build-and-push-base-images.result == 'skipped') &&
+      (needs.create-image-tag.result == 'success' || needs.create-image-tag.result == 'skipped') &&
+      (needs.ensure-version-increment.result == 'success' || needs.ensure-version-increment.result == 'skipped')
+    container:
+      # FIXME: hard-coded image repo
+      image: ghcr.io/numagic/lumos-ci:${{ needs.create-image-tag.outputs.image_tag}}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN}}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run python unittests
+        shell: bash -l {0}
+        run: |
+            source /usr/local/bin/entrypoint.sh
+            pytest tests/ examples/

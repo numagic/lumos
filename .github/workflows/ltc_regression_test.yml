@@ -1,0 +1,72 @@
+name: ltc-regression-test
+on: push
+
+jobs:
+  run-ltc-regression-test:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.9
+          auto-update-conda: true
+          environment-file: environment.yml
+      - name: Run LTC sweep and NLP profiling
+        shell: bash -l {0}
+        # This would fail if pytest fails, and will write out result files if successful
+        # Somehow we need to use python3 -m pytest to ensure that we're running with
+        # the correct python, and that's only for the regression tests folder...
+        run: |
+          conda env list
+          python3 -m pip install .
+          python3 regression_tests/run_benchmark.py 
+      - uses: actions/upload-artifact@v3
+        with:
+          path: |
+            track_sweep_results.csv
+            track_sweep_summary.csv
+            summary.json
+          if-no-files-found: error        
+      # Download previous benchmark result from cache (if exists)
+      - name: Download previous benchmark data
+        # Only store reults and display if push to main
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}      
+        uses: actions/cache@v1
+        with:
+          path: ./cache
+          key: ${{ runner.os }}-benchmark
+      # Run `github-action-benchmark` action for features
+      - name: Store benchmark result for features
+        if: ${{ github.event_name == 'push' }}
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: customSmallerIsBetter
+          # Where the output from the benchmark tool is stored
+          output-file-path: summary.json
+          # Workflow will fail when an alert happens
+          fail-on-alert: False             
+          # Set auto-push to false since GitHub API token is not given
+          auto-push: False
+          # Need to ensure external-data-json-path is not set, otherwise won't create
+          # gh-pages branch
+          benchmark-data-dir-path: dev/bench-features
+      - name: Push benchmark result for features
+        if: ${{ github.event_name == 'push' }}      
+        run: git push 'https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/numagic/lumos.git' gh-pages:gh-pages        
+      # Run `github-action-benchmark` action for main only
+      - name: Store benchmark result
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: customSmallerIsBetter
+          # Where the output from the benchmark tool is stored
+          output-file-path: summary.json
+          # Workflow will fail when an alert happens
+          fail-on-alert: False             
+          # Set auto-push to false since GitHub API token is not given
+          auto-push: False
+          # Need to ensure external-data-json-path is not set, otherwise won't create
+          # gh-pages branch
+      - name: Push benchmark result
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}      
+        run: git push 'https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/numagic/lumos.git' gh-pages:gh-pages
