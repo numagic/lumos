@@ -723,16 +723,16 @@ class StateSpaceModel(Model):
             p.wait()
 
         # Wrap the functions to take in dict params
+        # FIXME: fixed thread number
+        _mapped_forward = lnp.cmap(
+            cas.external("forward", library_path),
+            num_workers=32,
+            in_axes=[0, 0, 0, None],
+        )
+
         def cas_batched_forward(_states, _inputs, _mesh, _params):
             _flat_params, _ = _params.tree_ravel()
-
-            # FIXME: fixed thread number
-            out = lnp.cmap(
-                cas.external("forward", library_path),
-                num_workers=32,
-                in_axes=[0, 0, 0, None],
-            )(_states, _inputs, _mesh, _flat_params)
-
+            out = _mapped_forward(_states, _inputs, _mesh, _flat_params)
             return StateSpaceModelReturn(*out)
 
         self._batched_forward = cas_batched_forward
@@ -758,3 +758,52 @@ class StateSpaceModel(Model):
             num_con=self.num_implicit_res,
             **implicit_functions,
         )
+
+    def export_c_mex(self, cfile: str, CasType: type = cas.MX):
+        """Export a state space model into c-code that is ready for mex.
+
+        The exported function has the following API:
+
+        states_dot, outputs, con_outputs, residuals = function(states, inputs, mesh, params)
+        where each I/O is an array of the corresponding size.
+
+        Args:
+            cfile (str): path of the c-file for export, includg .c extension. Limited to
+                current working directory only.
+            CasType (type, optional): casadi type to use, SX or MX. Defaults to MX.
+
+        """
+        # FIXME: path management, currently local directory only, which is a limitation
+        # that comes from casadi
+        params = self.get_recursive_params()
+        flat_params, unravel = params.tree_ravel()
+
+        cas_flat_params = CasType.sym("params", len(flat_params))
+        cas_dict_params = unravel(cas_flat_params)
+
+        mesh = CasType.sym("distance")
+        states = CasType.sym("states", self.num_states)
+        inputs = CasType.sym("inputs", self.num_inputs)
+
+        # Only the model calls need to go inside the context manager.
+        with lnp.use_backend("casadi"):
+            model_return = self.apply_and_forward_with_arrays(
+                states, inputs, mesh, cas_dict_params
+            )
+
+        # Generate code
+        codegen = cas.CodeGenerator(cfile, dict(mex=True, main=True))
+
+        codegen.add(
+            cas.Function(
+                "forward", [states, inputs, mesh, cas_flat_params], [*model_return]
+            )
+        )
+
+        codegen.generate()
+
+        # Need to set the parameters back to the original params, as they were replaced
+        # with casadi variables during the apply_and_forward_with_arrays
+        # TODO: the same also happens to other casadi export and also jax tracing right?
+        # Can we generalize this problem?
+        self.set_recursive_params(params)

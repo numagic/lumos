@@ -1,0 +1,94 @@
+name: test-mex-with-octave
+# Tests in linux, export a state-space model to c-code, and export saved I/O data.
+# Then in both linux and windows, compile the c-code into mex and executes it and tests
+# if outputs matches expected values.
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+     branches:
+      - 'main'
+
+# NOTE: we use 'artifact' instead of 'cache' because cache is OS specific, meaning we
+# can't easily generate a file in linux and share it with linxu and windows via cache
+jobs:
+  generate-c-code:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-name: ${{ steps.generate-artifact-name.outputs.artifact-name}}
+      file-name: ${{ steps.generate-file-name.outputs.file-name}}
+    steps:
+      - name: Generate artifact name
+        # We want to share the generated code between jobs of the same commit, but not
+        # between commits, therefore we need to generate unique keys.
+        id: generate-artifact-name
+        run: |
+          echo "::set-output name=artifact-name::codegen-${{ github.run_id }}-${{ github.run_attempt }}"
+        shell: bash
+      - name: Generate file name
+        # We want to share the generated code between jobs of the same commit, but not
+        # between commits, therefore we need to generate unique keys.
+        id: generate-file-name
+        run: |
+          echo "::set-output name=file-name::forward"
+        shell: bash        
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2  
+        with:
+          python-version: 3.9
+          auto-update-conda: true
+          environment-file: environment.yml
+      - name: Generate code
+        shell: bash -l {0}
+        run: |
+          python3 -m pip install . # use python3 here as python seems to point to python2, which is different to linux
+          python3 tests/test_mex/export_model.py ${{ steps.generate-file-name.outputs.file-name}}
+      - name: Store generated code and test data as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.generate-artifact-name.outputs.artifact-name }}
+          path: |
+            ${{ steps.generate-file-name.outputs.file-name}}.c
+            ${{ steps.generate-file-name.outputs.file-name}}.mat
+
+  compile-mex-and-run-on-linux:
+    runs-on: ubuntu-latest
+    needs: generate-c-code
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install octave
+        run: |
+          sudo apt -yq update
+          sudo apt install -yq --no-install-recommends octave liboctave-dev        
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ needs.generate-c-code.outputs.artifact-name }}
+      - run: octave-cli tests/test_mex/compile_mex_and_run.m ${{ needs.generate-c-code.outputs.file-name }}
+
+  compile-mex-and-run-on-windows:
+    runs-on: windows-latest
+    needs: generate-c-code
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install octave
+        run: choco install octave.portable
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ needs.generate-c-code.outputs.artifact-name }}
+      # On windows, 'octave' seems to dispatch into a different process, while the
+      # the current process would exist with status 0 immediately...
+      # Also needs to use "" for path, otherwise it won't be parsed correctly.
+      - run: |
+          octave-cli "tests\test_mex\compile_mex_and_run.m" ${{ needs.generate-c-code.outputs.file-name }}
+        shell: bash
+
+  successful-mex-compile-and-run-on-windows-and-linux:
+    # A workaround to allow using one status check for multipe
+    runs-on: ubuntu-latest
+    needs: 
+      - compile-mex-and-run-on-windows
+      - compile-mex-and-run-on-linux
+    steps:
+    - run: echo Done!            
