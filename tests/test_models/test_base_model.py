@@ -198,13 +198,16 @@ class VehicleForTest(StateSpaceModel):
         tire_inputs = tire_model.make_const_dict("inputs", 0.3)
         tire_return = tire_model.forward(tire_inputs)
 
-        submodel_outputs = self.combine_submodel_outputs(
+        submodel_outputs = self.combine_submodel_groups(
             powertrain=powertrain_return.outputs, tire=tire_return.outputs,
         )
 
         # Make some dummy outputs
         outputs = self.make_dict("outputs", ax=AX, ay=AY, **submodel_outputs)
-        states_dot = self.make_dict("states_dot", vx=0.1, vy=0.2)
+        submodel_states_dot = self.combine_submodel_groups(
+            powertrain=powertrain_return.states_dot
+        )
+        states_dot = self.make_dict("states_dot", vx=0.1, vy=0.2, **submodel_states_dot)
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs
         )
@@ -242,7 +245,7 @@ class HybridPowertrain(StateSpaceModel):
         emotor_return = emotor_model.forward(emotor_inputs)
 
         # Combine all submodel outputs into a flattened dictionary
-        submodel_outputs = self.combine_submodel_outputs(
+        submodel_outputs = self.combine_submodel_groups(
             engine=engine_return.outputs, emotor=emotor_return.outputs,
         )
 

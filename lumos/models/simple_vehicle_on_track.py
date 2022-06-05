@@ -8,8 +8,6 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
 
 # Combine the signals to create the names. TODO: can we make it more automatic?
 @state_space_io(
-    states=TrackPosition2D.get_direct_group_names("states")
-    + SimpleVehicle.get_direct_group_names("states"),
     inputs=SimpleVehicle.get_direct_group_names("inputs")
     + ("track_curvature", "track_heading"),
     con_outputs=(
@@ -22,8 +20,6 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
         "vehicle.slip_angle_rl",
         "vehicle.slip_angle_rr",
     ),
-    residuals=TrackPosition2D.get_direct_group_names("residuals")
-    + SimpleVehicle.get_direct_group_names("residuals"),
 )
 class SimpleVehicleOnTrack(StateSpaceModel):
     _submodel_names = ("vehicle", "kinematics")
@@ -48,7 +44,8 @@ class SimpleVehicleOnTrack(StateSpaceModel):
 
         # Pick out vehicle states
         vehicle_states = {
-            k: states[k] for k in self.get_submodel("vehicle").get_group_names("states")
+            k: states["vehicle." + k]
+            for k in self.get_submodel("vehicle").get_group_names("states")
         }
 
         # Pick out vehicle params. NOT DONE! NOT EASY!
@@ -59,7 +56,7 @@ class SimpleVehicleOnTrack(StateSpaceModel):
         # Call Kinematics model
         # Pick out states
         kinematic_states = {
-            k: states[k]
+            k: states["kinematics." + k]
             for k in self.get_submodel("kinematics").get_group_names("states")
         }
 
@@ -77,19 +74,24 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             states=kinematic_states, inputs=kinematic_inputs, mesh=mesh,
         )
 
-        # Convert to distance domain derivatives
+        # Convert to distance domain derivatives for the vehicle model only
+        # HACK: if we unify the collection process, how do we make such individual
+        # modifications to just the outputs from one submodel?
         dt_ds = kinematics_return.states_dot["time"]
-        states_dot = {
-            **kinematics_return.states_dot,
-            **{k: v * dt_ds for k, v in vehicle_return.states_dot.items()},
+        vehicle_states_dot = {
+            k: v * dt_ds for k, v in vehicle_return.states_dot.items()
         }
-
-        # Assemble final outputs
-        outputs = self.combine_submodel_outputs(
-            vehicle=vehicle_return.outputs, kinematics=kinematics_return.outputs
+        states_dot = self.combine_submodel_groups(
+            vehicle=vehicle_states_dot, kinematics=kinematics_return.states_dot
         )
 
-        residuals = vehicle_return.residuals
+        # Assemble final outputs
+        outputs = self.combine_submodel_groups(
+            vehicle=vehicle_return.outputs, kinematics=kinematics_return.outputs
+        )
+        residuals = self.combine_submodel_groups(
+            vehicle=vehicle_return.residuals, kinematics=kinematics_return.residuals
+        )
 
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs, residuals=residuals,

@@ -349,7 +349,7 @@ class SimpleVehicle(StateSpaceModel):
             wheel_speed_rr=wheel_speed_dot["rr"],
         )
 
-        submodel_outputs = self.combine_submodel_outputs(
+        submodel_outputs = self.combine_submodel_groups(
             aero=aero_return.outputs,
             tire_fl=tire_outputs["fl"],
             tire_fr=tire_outputs["fr"],
