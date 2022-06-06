@@ -1,9 +1,12 @@
 import glob
+import hashlib
 import logging
 import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+from os.path import exists, getsize
 
 import numpy as np
 import pandas as pd
@@ -11,7 +14,14 @@ import pyarrow as pa
 from pyarrow import parquet as pq
 from scipy import sparse
 
-from lumos.models.base import StateSpaceModel
+import casadi as cas
+import numpy as np
+from jax import jit, vmap
+
+import lumos.numpy as lnp
+from lumos.optimal_control.nlp import MappedConstraints, JaxConstraints, CasConstraints
+
+from lumos.models.base import StateSpaceModel, StateSpaceModelReturn
 from lumos.optimal_control.nlp import (
     BaseConstraints,
     LinearConstraints,
@@ -86,6 +96,16 @@ class ScaledMeshOCP(CompositeProblem):
         if sim_config is None:
             sim_config = self.get_sim_config()
 
+        # HACK: ideally, the model doesn't even care about constraint outputs. It is
+        # only used when creating the NLP functions (and hence never a part of model
+        # 'state' in software terms)
+        # Set constraint outputs
+        self.model.names._replace(con_outputs=sim_config.con_outputs)
+
+        # Also store it, but with an interesting name so easy to track later when we
+        # tidy things up HACK
+        self._con_output_names = sim_config.con_outputs
+
         self.hessian_approximation: str = sim_config.hessian_approximation
         self.num_intervals: int = sim_config.num_intervals
         self.transcription: Transcription = make_transcription(
@@ -94,12 +114,14 @@ class ScaledMeshOCP(CompositeProblem):
         self.is_condensed: bool = sim_config.is_condensed
         self.backend: str = sim_config.backend
         # TODO: accessing private attribute
+        # HACK: the right way: the ocp should tell the model what group to use
         self.stage_var_groups = list(self.model._implicit_inputs)
 
         # Create a decision variable operator
         # NOTE: we factor this out of OCP to simplify and to seperate responsibility
         self.dec_var_operator = DecVarOperator(
             model_var_names=self.model.names,
+            con_outputs=sim_config.con_outputs,
             num_intervals=self.num_intervals,
             num_stages_per_interval=self.transcription.num_stages_per_interval,
             stage_var_groups=self.stage_var_groups,
@@ -114,14 +136,16 @@ class ScaledMeshOCP(CompositeProblem):
         self._logging_dir: str = None
         self._initialize_logging()
 
-        self.model.make_model_algebra_cons(self.backend)
-
         # NOTE: here it is mega dangerous that if we keep appending ConvProlbme to the
         # composite problem, then it could be
         super().__init__(num_in=self.num_dec)
-        self._build_objective()
 
-        self._build_model_algebra()
+        # HACK: maybe this method should also belong to the OCP to make the model even
+        # lighter?
+        self.model._make_batched_forward(self.backend, sim_config.con_outputs)
+
+        self._build_objective()
+        self._build_model_algebra(self.backend, con_outputs=sim_config.con_outputs)
         self._build_continuity_cons()
         if sim_config.is_cyclic:
             self._build_cyclic_cons(sim_config.non_cyclic_vars)
@@ -259,7 +283,7 @@ class ScaledMeshOCP(CompositeProblem):
             np.arange(self.model.num_states),
             axis=0,
             num_repeat=self.num_stages,
-            num_increment=self.model.num_implicit_res,
+            num_increment=self.dec_var_operator.num_implicit_res,
         )
         # FIXME: dxdot_dvar has undesired x_dot entry with value -1 in it.
         dxdot_dvar = algebraic_jac[idx_xdot_eqs.ravel(), :]
@@ -433,7 +457,7 @@ class ScaledMeshOCP(CompositeProblem):
                 np.arange(self.model.num_states),
                 axis=0,
                 num_repeat=self.num_stages,
-                num_increment=self.model.num_implicit_res,
+                num_increment=self.dec_var_operator.num_implicit_res,
             )
             dxdot_dvar = algebraic_jac[idx_xdot_eqs.ravel(), :]
 
@@ -610,7 +634,7 @@ class ScaledMeshOCP(CompositeProblem):
         # First we create a dictioinary to summarise all scales in one place, with
         # default values of 1 (unscaled)
         var_scales = {
-            g: self.model.make_const_vector(g, 1.0) for g in self.stage_var_groups
+            g: np.ones(op.get_stage_var_size(g)) for g in self.stage_var_groups
         }
         var_scales["global"] = np.ones(op.num_global_var)
 
@@ -642,7 +666,10 @@ class ScaledMeshOCP(CompositeProblem):
             # 2) the user are free to set the scales of the residual in the model.
             condensed_model_algebra_scales = np.concatenate(
                 [continuity_scales]
-                + [var_scales["con_outputs"], np.ones(self.model.num_residuals),]
+                + [
+                    var_scales["con_outputs"],
+                    np.ones(self.dec_var_operator.num_implicit_res),
+                ]
                 * self.num_stages
             )
             self._constraints["model_algebra"].set_con_scales(
@@ -656,7 +683,7 @@ class ScaledMeshOCP(CompositeProblem):
                 [
                     var_scales["states"],
                     var_scales["con_outputs"],
-                    np.ones(self.model.num_residuals),
+                    np.ones(self.dec_var_operator.num_residuals),
                 ]
                 * self.num_stages
             )
@@ -854,7 +881,10 @@ class ScaledMeshOCP(CompositeProblem):
 
             stage_cons = np.reshape(
                 stage_cons,
-                (self.num_stages, self.model.num_implicit_res - self.model.num_states),
+                (
+                    self.num_stages,
+                    self.dec_var_operator.num_implicit_res - self.model.num_states,
+                ),
             )
 
             stage_con_columns = [
@@ -865,11 +895,14 @@ class ScaledMeshOCP(CompositeProblem):
             interval_cons = cons["continuity"]
             stage_cons = cons["model_algebra"]
             stage_cons = np.reshape(
-                stage_cons, (self.num_stages, self.model.num_implicit_res)
+                stage_cons, (self.num_stages, self.dec_var_operator.num_implicit_res)
             )
             stage_con_columns = (
                 ["stage_con." + n for n in self.model.get_group_names("states_dot")]
-                + ["stage_con." + n for n in self.model.get_group_names("con_outputs")]
+                + [
+                    "stage_con." + n
+                    for n in self.dec_var_operator.get_stage_var_names("con_outputs")
+                ]
                 + ["stage_con." + n for n in self.model.get_group_names("residuals")]
             )
 
@@ -895,7 +928,7 @@ class ScaledMeshOCP(CompositeProblem):
 
         dec_var_df = pd.DataFrame(
             data=self.dec_var_operator.get_stage_var_array(dec_var),
-            columns=self.dec_var_operator.stage_var_names,
+            columns=self.dec_var_operator.flat_stage_var_names,
         )
 
         outputs_df = pd.DataFrame(
@@ -1182,7 +1215,7 @@ class ScaledMeshOCP(CompositeProblem):
         num_con = self.num_intervals * (
             op.num_stages_per_interval - 1
         ) * self.model.num_states + self.num_stages * (
-            self.model.num_implicit_res - self.model.num_states
+            self.dec_var_operator.num_implicit_res - self.model.num_states
         )
 
         condensed_cons = BaseConstraints(
@@ -1197,15 +1230,17 @@ class ScaledMeshOCP(CompositeProblem):
 
         self.add_constraints("model_algebra", condensed_cons)
 
-    def _build_model_algebra(self):
+    def _build_model_algebra(self, backend: str, con_outputs: Tuple[str]):
         # NOTE: we must call map directly on a casadi function objecte.
         # map doesn't work on a 'partial' object
         # This means the mapped function container must be the one that passes in
         # the parameters!
         # This also means mapping dictionary to flat must also happen at top level
         # The casadi function must be left untouched to be mapped
+        model_algebra = self.make_model_algebra_cons(backend, con_outputs)
+
         stage_cons = ConvConstraints(
-            unit_problem=self.model.model_algebra,
+            unit_problem=model_algebra,
             dec_var_op=self.dec_var_operator,
             normalized_mesh=self._flat_normalized_mesh,
             mesh_scale_fn=self._get_mesh_scale,
@@ -1238,3 +1273,256 @@ class ScaledMeshOCP(CompositeProblem):
 
     def get_init_guess(self):
         return np.random.randn(self.num_dec)
+
+    # HACK: methods below are factored out of StateSpaceModel, which makes sense, as it
+    # would reuqire a lot of info that shouldn't be needed by StateSpaceModel.
+    # But we need to think about where we could factorize the ocp class further, it's
+    # too big now.
+
+    def make_model_algebra_cons(self, backend: str, con_outputs: Tuple[str]):
+        """Create the model_algebra constraints that are needed for the OCP.
+
+        FIXME: currently we also require this function to formulate the _batched_forward
+        function, which we should probaly consider moving somewhere else.
+        """
+        if backend == "casadi":
+            return self._make_casadi_model_algebra_cons(con_outputs)
+        elif backend == "jax":
+            return self._make_jax_model_algebra_cons(con_outputs)
+        elif backend == "custom":
+            return self._make_custom_model_algebra_cons(con_outputs)
+        else:
+            raise ValueError(
+                f"{backend} is not supported. Only 'jax', 'casadi' and 'custom' backends are supported."
+            )
+
+    def _model_algebra_jacobianstructure(self):
+        """A pessimistic estimate for the jacobian structure of model algebra.
+
+        NOTE: Here we rely on a few dangerous assumptions:
+        1) the implicit form is a explicit turned into implicit (see model.implicit),
+        with states_dot and con_outputs only acting as linear variables.
+        2) the ordering of constraints are assumed to be defined by self.implicit
+
+        TODO: if we really want to, we could use casadi to get the symbolic jac struct
+        and then apply it to jax functions (and potentially other backend).
+        """
+        # states and inputs are involved in all constraints
+        # FIXME: this relies on the ordering of the constraints
+        op = self.dec_var_operator
+        rows = np.stack(
+            [np.arange(op.num_implicit_res)]
+            * (op.get_stage_var_size("states") + op.get_stage_var_size("inputs"))
+        ).T.ravel()
+        cols = np.stack(
+            [
+                np.concatenate(
+                    [
+                        op.get_group_indices_at_stage("states", 0),
+                        op.get_group_indices_at_stage("inputs", 0),
+                    ]
+                )
+            ]
+            * self.dec_var_operator.num_implicit_res
+        ).ravel()
+
+        # states_dot part
+        # FIXME: this relies on both the ordering of the constraints and the variables
+        states_dot_rows = np.arange(op.get_stage_var_size("states_dot"))
+        states_dot_cols = op.get_group_indices_at_stage("states_dot", 0)
+
+        # con_outputs part
+        # FIXME: this relies on both the ordering of the constraints and the variables
+        con_outputs_rows = op.get_stage_var_size("states") + np.arange(
+            op.get_stage_var_size("con_outputs")
+        )
+        con_outputs_cols = op.get_group_indices_at_stage("con_outputs", 0)
+
+        rows = np.concatenate([rows, states_dot_rows, con_outputs_rows])
+        cols = np.concatenate([cols, states_dot_cols, con_outputs_cols])
+
+        return rows, cols
+
+    def _model_algebra_hessianstructure(self):
+        """A pessimistic estimate for the hessian structure of model algebra.
+
+        NOTE: states_dot and con_outputs are only linear, so no hessian entries for
+        them, but for truely implicit equations where states_dot or con_outputs are
+        algebraic variables they could become nonlinear! But in those case, the
+        condensed approach also won't work. (because it has no explicit ODE to work on)
+
+        TODO: if we really want to, we could use casadi to get the symbolic jac struct
+        and then apply it to jax functions (and potentially other backend).
+        """
+        op = self.dec_var_operator
+
+        rows, cols = np.nonzero(np.ones((op.num_var_stage, op.num_var_stage)))
+
+        # remove those related to states_dot and con_outputs
+        idx_remove = np.hstack(
+            [
+                op.get_group_indices_at_stage("states_dot", 0),
+                op.get_group_indices_at_stage("con_outputs", 0),
+            ]
+        )
+
+        keep_rows = np.array([r not in idx_remove for r in rows])
+        keep_cols = np.array([c not in idx_remove for c in cols])
+        keep = keep_rows & keep_cols
+
+        return rows[keep], cols[keep]
+
+    def _make_jax_model_algebra_cons(self, con_outputs):
+        # For jax, we rely on jac and hessian to compute the constraints at a later
+        # stage. See JaxConstraints
+        op = self.dec_var_operator
+
+        def wrapped_fn(stage_vars, mesh, params):
+            return self.model._apply_and_flat_implicit(
+                stage_vars, mesh, params, con_outputs=con_outputs
+            )
+
+        implicit_functions = {"constraints": wrapped_fn}
+
+        model_algebra = JaxConstraints(
+            num_in=op.num_var_stage,
+            num_con=self.dec_var_operator.num_implicit_res,
+            **implicit_functions,
+            jacobian_structure=self._model_algebra_jacobianstructure(),
+            hessian_structure=self._model_algebra_hessianstructure(),
+        )
+
+        return model_algebra
+
+    def _make_custom_model_algebra_cons(self):
+        implicit_functions = {
+            "constraints": self.model._apply_and_flat_implicit,
+            "jacobian": self.model._implicit_jac,
+            "jacobian_structure": self.model._implicit_jacobianstructure(),
+            "hessian": self.model._implicit_hess,
+            "hessian_structure": self.model._implicit_hessianstructure(),
+        }
+        op = self.dec_var_operator
+
+        model_algebra = MappedConstraints(
+            num_in=op.num_var_stage,
+            num_con=self.dec_var_operator.num_implicit_res,
+            **implicit_functions,
+        )
+        return model_algebra
+
+    def _make_casadi_model_algebra_cons(
+        self, con_outputs: Tuple[str], CasType: type = cas.MX
+    ):
+        # NOTE: for large linear operations, like those in FC layers, MX is much faster
+        # than SX both for compilation and executtion
+        op = self.dec_var_operator
+
+        params = self.model.get_recursive_params()
+        flat_params, unravel = params.tree_ravel()
+
+        cas_flat_params = CasType.sym("params", len(flat_params))
+        cas_dict_params = unravel(cas_flat_params)
+
+        mesh = CasType.sym("distance")
+        states = CasType.sym("states", op.get_stage_var_size("states"))
+        inputs = CasType.sym("inputs", op.get_stage_var_size("inputs"))
+        stage_vars = CasType.sym("stage_vars", op.num_var_stage)
+        mult = CasType.sym("mult", op.num_implicit_res)
+
+        # Only the model calls need to go inside the context manager.
+        with lnp.use_backend("casadi"):
+            model_return = self.model.apply_and_forward_with_arrays(
+                states, inputs, mesh, cas_dict_params, con_outputs=con_outputs
+            )
+            res = self.model._apply_and_flat_implicit(
+                stage_vars, mesh, cas_dict_params, con_outputs=con_outputs
+            )
+            lagrange = lnp.dot(mult, res)
+
+        jac = cas.jacobian(res, stage_vars)
+        lagrange_hessian, lagrange_gradient = cas.hessian(lagrange, stage_vars)
+
+        # Generate code
+        filename = "nlpfunctions"
+        cfile = filename + ".c"
+        # FIXME: path management, currently local directory only
+        codegen = cas.CodeGenerator(cfile)
+
+        codegen.add(
+            cas.Function(
+                "forward", [states, inputs, mesh, cas_flat_params], [*model_return]
+            )
+        )
+        codegen.add(
+            cas.Function("implicit_con", [stage_vars, mesh, cas_flat_params], [res])
+        )
+        codegen.add(
+            cas.Function("implicit_jac", [stage_vars, mesh, cas_flat_params], [jac])
+        )
+        codegen.add(
+            cas.Function(
+                "implicit_hess",
+                [stage_vars, mesh, cas_flat_params, mult],
+                [lagrange_hessian],
+            )
+        )
+        codegen.generate()
+
+        logger.info(f"Generated c-code with {getsize(cfile)} lines: ")
+        # Call compiler if no library exists already
+        with open(cfile, "rb") as f:
+            file_hash = hashlib.md5()
+            for chunk in iter(lambda: f.read(8192), b""):
+                file_hash.update(chunk)
+
+        library_name = file_hash.hexdigest()
+        library_path = "./" + library_name + ".so"
+
+        if exists(library_path):
+            logger.info(f"{library_path} already exists, no compliation is needed.")
+        else:
+            logger.info(f"Compiling casadi library {library_path}")
+            cmd = ["gcc", "-fPIC", "-o2", "-shared", cfile, "-o", library_path]
+            p = subprocess.Popen(cmd)
+            p.wait()
+
+        # Wrap the functions to take in dict params
+        # FIXME: fixed thread number
+        _mapped_forward = lnp.cmap(
+            cas.external("forward", library_path),
+            num_workers=32,
+            in_axes=[0, 0, 0, None],
+        )
+
+        def cas_batched_forward(_states, _inputs, _mesh, _params):
+            _flat_params, _ = _params.tree_ravel()
+            out = _mapped_forward(_states, _inputs, _mesh, _flat_params)
+            return StateSpaceModelReturn(*out)
+
+        self._batched_forward = cas_batched_forward
+
+        # add sparsity structure
+        # Can we not get this from the symbolic SX? eg, jac.sparsity(), but then what?
+        # This get_triplet interface almost looks like a bug...
+        # [*row_indices, [*col_indices]] is what is returned
+        # see: http://casadi.sourceforge.net/api/html/d5/da8/classcasadi_1_1Sparsity.html#a1f3eed93488c3cf121f47bec4956927f
+        *jac_rows, jac_cols = jac.sparsity().get_triplet()
+        *hess_rows, hess_cols = lagrange_hessian.sparsity().get_triplet()
+
+        implicit_functions = {
+            "constraints": cas.external("implicit_con", library_path),
+            "jacobian": cas.external("implicit_jac", library_path),
+            "hessian": cas.external("implicit_hess", library_path),
+            "jacobian_structure": (np.array(jac_rows), np.array(jac_cols)),
+            "hessian_structure": (np.array(hess_rows), np.array(hess_cols)),
+        }
+
+        model_algebra = CasConstraints(
+            num_in=op.num_var_stage,
+            num_con=self.dec_var_operator.num_implicit_res,
+            **implicit_functions,
+        )
+
+        return model_algebra
+

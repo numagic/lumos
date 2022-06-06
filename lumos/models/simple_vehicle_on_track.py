@@ -12,16 +12,6 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
     + SimpleVehicle.get_direct_group_names("states"),
     inputs=SimpleVehicle.get_direct_group_names("inputs")
     + ("track_curvature", "track_heading"),
-    con_outputs=(
-        "vehicle.slip_ratio_fl",
-        "vehicle.slip_ratio_fr",
-        "vehicle.slip_ratio_rl",
-        "vehicle.slip_ratio_rr",
-        "vehicle.slip_angle_fl",
-        "vehicle.slip_angle_fr",
-        "vehicle.slip_angle_rl",
-        "vehicle.slip_angle_rr",
-    ),
     residuals=TrackPosition2D.get_direct_group_names("residuals")
     + SimpleVehicle.get_direct_group_names("residuals"),
 )

@@ -46,6 +46,7 @@ class DecVarOperator:
     def __init__(
         self,
         model_var_names: NamedTuple,
+        con_outputs: tuple[str, ...],
         num_intervals: int,
         num_stages_per_interval: int,
         stage_var_groups: Tuple[str, ...],
@@ -56,6 +57,7 @@ class DecVarOperator:
         Args:
             model_var_names (NamedTuple): the NamedTuple describing all the I/O of a
                 model
+            con_outputs (Tuple[str, ...]): name of the outputs used as constraints
             num_intervals (int): number of intervals of the problem.
             num_stages_per_interval (int): number of stages per interval.
             stage_var_groups (Tuple[str, ...]): the groups of variables (from the model)
@@ -65,6 +67,20 @@ class DecVarOperator:
                 problem. eg: some global variable to scale the mesh.
         """
         self._model_var_names = model_var_names
+
+        # Construct the stage varialbe named tuple.
+        StageVarNames = namedtuple(
+            "StageVarNames", ("states", "inputs", "states_dot", "con_outputs")
+        )
+        self._stage_var_names = StageVarNames(
+            states=model_var_names.states,
+            inputs=model_var_names.inputs,
+            states_dot=model_var_names.states_dot,
+            con_outputs=con_outputs,
+        )
+
+        # HACK: we still need this stage_var_groups to pass the order of groups from ocp
+        # to these helper class. But we could get rid of it
         self._stage_var_groups = stage_var_groups
         self._global_var_names = global_var_names
 
@@ -98,11 +114,29 @@ class DecVarOperator:
     def num_dec(self):
         return self.num_all_stage_var + self.num_global_var
 
+    # HACK: it's not clear yet who should hold the num residuals property
+    @property
+    def num_residuals(self):
+        """Residuals of the model forward method return"""
+        return len(self._model_var_names.residuals)
+
+    @property
+    def num_implicit_res(self):
+        """Residuals of the implicit function"""
+        return (
+            self.get_stage_var_size("states")
+            + self.get_stage_var_size("con_outputs")
+            + self.num_residuals
+        )
+
     def has_global_var(self) -> bool:
         return self.num_global_var > 0
 
+    def get_stage_var_names(self, group: str) -> Tuple[str]:
+        return getattr(self._stage_var_names, group)
+
     def get_stage_var_size(self, group: str) -> int:
-        return len(getattr(self._model_var_names, group))
+        return len(getattr(self._stage_var_names, group))
 
     def _build_group_split_indices(self) -> np.ndarray:
         """Return an index set that can be used to split stage var into groups"""
@@ -170,17 +204,19 @@ class DecVarOperator:
         return group + "." + name
 
     @property
-    def stage_var_names(self):
+    def flat_stage_var_names(self):
         var_names = []
         for group in self._stage_var_groups:
             var_names += [
                 self._make_stage_var_name(group=group, name=n)
-                for n in getattr(self._model_var_names, group)
+                for n in getattr(self._stage_var_names, group)
             ]
         return var_names
 
     def _construct_stage_var_enum(self):
-        self._stage_var_enum = IntEnum("StageVarEnum", self.stage_var_names, start=0)
+        self._stage_var_enum = IntEnum(
+            "StageVarEnum", self.flat_stage_var_names, start=0
+        )
 
     def _construct_global_var_enum(self):
         self._global_var_enum = IntEnum(
@@ -265,12 +301,11 @@ class DecVarOperator:
 
         # allow negative index like python list
         stage %= self.num_stages
-
         return (
             np.array(
                 [
                     self._stage_var_enum[self._make_stage_var_name(group=group, name=n)]
-                    for n in getattr(self._model_var_names, group)
+                    for n in getattr(self._stage_var_names, group)
                 ]
             )
             + stage * self.num_var_stage
