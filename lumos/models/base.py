@@ -447,21 +447,13 @@ class StateSpaceModel(Model):
         directly.
 
         the order of the outputs should be: [states_dot, con_outputs, residuals]. This
-        is a hard-coded limitation of the current design.
+        is a hard-coded limitation of the current design. -> FIXME
         """
 
         model_return = self.forward_with_arrays(states, inputs, mesh)
 
         # TODO: here we return an array, but maybe we should at least always check
         # (especially for user-defined ones) that the residual size is correct.
-        #
-        # TODO: maybe we should also refer to constraints by name, just like what we did
-        # for the decision variables.
-
-        # Assemble scaled residuals. We could move scales outside of the residual
-        # functions so the scales are no longer compiled into the residual calls. But
-        # that would require manually scaling the jacobian and hessian as well -- Doable
-        # but not necessary for now.
 
         res = lnp.vector_concat(
             [

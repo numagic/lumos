@@ -610,7 +610,7 @@ class ScaledMeshOCP(CompositeProblem):
         # First we create a dictioinary to summarise all scales in one place, with
         # default values of 1 (unscaled)
         var_scales = {
-            g: self.model.make_const_vector(g, 1.0) for g in self.model._implicit_inputs
+            g: self.model.make_const_vector(g, 1.0) for g in self.stage_var_groups
         }
         var_scales["global"] = np.ones(op.num_global_var)
 
