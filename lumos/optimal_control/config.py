@@ -88,6 +88,7 @@ class SimConfig:
     is_condensed: bool = False
     backend: str = "jax"
     hessian_approximation: str = "exact"
+    con_outputs: Tuple[str] = ()
     boundary_conditions: Tuple[BoundaryConditionConfig] = ()
     bounds: Tuple[BoundConfig] = ()
     scales: Tuple[ScaleConfig] = ()

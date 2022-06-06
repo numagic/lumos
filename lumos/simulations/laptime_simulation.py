@@ -90,6 +90,19 @@ def get_default_scales() -> Tuple[ScaleConfig]:
     return scales
 
 
+def get_default_con_outputs() -> Tuple[str]:
+    return (
+        "vehicle.slip_ratio_fl",
+        "vehicle.slip_ratio_fr",
+        "vehicle.slip_ratio_rl",
+        "vehicle.slip_ratio_rr",
+        "vehicle.slip_angle_fl",
+        "vehicle.slip_angle_fr",
+        "vehicle.slip_angle_rl",
+        "vehicle.slip_angle_rr",
+    )
+
+
 @dataclass
 class LTCConfig(SimConfig):
     track: str = None  # Have to give it a default to make it possible to inherit
@@ -102,6 +115,7 @@ class LTCConfig(SimConfig):
     ] = get_default_boundary_conditions()
     bounds: Tuple[BoundConfig] = get_default_bounds()
     scales: Tuple[ScaleConfig] = get_default_scales()
+    con_outputs: Tuple[str] = get_default_con_outputs()
 
     def __post_init__(self):
         super().__post_init__()
