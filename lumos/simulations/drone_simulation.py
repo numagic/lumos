@@ -47,6 +47,7 @@ class DroneSimulationConfig(SimConfig):
         default_factory=get_default_boundary_conditions
     )
     bounds: Tuple[BoundConfig] = field(default_factory=get_default_bounds)
+    con_output_names: Tuple[str] = ("sin_theta",)
 
 
 class DroneSimulation(ScaledMeshOCP):

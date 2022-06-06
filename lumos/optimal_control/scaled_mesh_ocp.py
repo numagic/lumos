@@ -50,7 +50,11 @@ class ScaledMeshOCP(CompositeProblem):
     ConfigClass: type = SimConfig
 
     # No Global variables
-    global_var_names: List[str] = ["mesh_scale"]
+    global_var_names: Tuple[str] = ("mesh_scale",)
+
+    # Stage variable groups in the order used in the flat inputs to model algebra
+    # constraints
+    stage_var_groups: Tuple[str] = ("states", "inputs", "states_dot", "con_outputs")
 
     # Boundary condition configs. We need to record these as they could be overwritten
     # by general bound settings, and it is messy to check which specific boundary
@@ -93,8 +97,14 @@ class ScaledMeshOCP(CompositeProblem):
         )
         self.is_condensed: bool = sim_config.is_condensed
         self.backend: str = sim_config.backend
-        # TODO: accessing private attribute
-        self.stage_var_groups = list(self.model._implicit_inputs)
+
+        # HACK: set model's implicit inputs
+        self.model.set_flat_implicit_inputs(self.stage_var_groups)
+
+        # HACK: Tell the model what outputs to use as constraint outputs.
+        self.model.names = self.model.names._replace(
+            con_outputs=sim_config.con_output_names
+        )
 
         # Create a decision variable operator
         # NOTE: we factor this out of OCP to simplify and to seperate responsibility
