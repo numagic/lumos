@@ -98,10 +98,12 @@ class ScaledMeshOCP(CompositeProblem):
         self.is_condensed: bool = sim_config.is_condensed
         self.backend: str = sim_config.backend
 
-        # HACK: set model's implicit inputs
+        # Set the groups of variables to be used in the implicit call of the model.
         self.model.set_flat_implicit_inputs(self.stage_var_groups)
 
-        # HACK: Tell the model what outputs to use as constraint outputs.
+        # Tell the model what outputs to use as constraint outputs.
+        # FIXME: names is a namedtuple, so it's immutable. Using the _replace method is
+        # just a workaround to change a field.
         self.model.names = self.model.names._replace(
             con_outputs=sim_config.con_output_names
         )
@@ -562,7 +564,7 @@ class ScaledMeshOCP(CompositeProblem):
 
     def set_default_bounds(self):
         """Set default bounds of decision variables without external configs.
-        
+
         For the base class, the default is set to be unbounded.
         """
 
@@ -572,7 +574,7 @@ class ScaledMeshOCP(CompositeProblem):
 
     def update_bounds(self, bounds: Tuple[BoundConfig]):
         """Update variable bounds using bound configs.
-        
+
         If bounds on the same varialbe are defined more than once, the later ones will
         overwrite the earlier ones, so that only the last one will remain in effect.
         """
@@ -652,7 +654,10 @@ class ScaledMeshOCP(CompositeProblem):
             # 2) the user are free to set the scales of the residual in the model.
             condensed_model_algebra_scales = np.concatenate(
                 [continuity_scales]
-                + [var_scales["con_outputs"], np.ones(self.model.num_residuals),]
+                + [
+                    var_scales["con_outputs"],
+                    np.ones(self.model.num_residuals),
+                ]
                 * self.num_stages
             )
             self._constraints["model_algebra"].set_con_scales(
@@ -784,7 +789,9 @@ class ScaledMeshOCP(CompositeProblem):
             # Write the result file
             result_file = os.path.join(self._logging_dir, "results.csv")
             self._create_result_df(
-                self._last_iter_dec_var, file_path=result_file, iter_num=self._num_iter,
+                self._last_iter_dec_var,
+                file_path=result_file,
+                iter_num=self._num_iter,
             )
 
             # Combine the metrics history
@@ -900,7 +907,8 @@ class ScaledMeshOCP(CompositeProblem):
         interval_cons = np.vstack([np.zeros(interval_con_shape[1]), interval_cons])
         # create interval con df
         interval_cons_df = pd.DataFrame(
-            data=interval_cons, columns=interval_con_columns,
+            data=interval_cons,
+            columns=interval_con_columns,
         )
 
         dec_var_df = pd.DataFrame(
@@ -1088,7 +1096,10 @@ class ScaledMeshOCP(CompositeProblem):
 
         # Then stack and increment along the interval axis
         A_rows = stack_and_increment(
-            A_rows, axis=-1, num_repeat=self.model.num_states, num_increment=1,
+            A_rows,
+            axis=-1,
+            num_repeat=self.model.num_states,
+            num_increment=1,
         )
 
         A_cols = stack_and_increment(
