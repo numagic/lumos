@@ -87,12 +87,13 @@ def _rotate_z(theta: float) -> lnp.ndarray:
         "slip_angle_rl",
         "slip_angle_rr",
     ),
-    residuals=("ax", "ay",),
+    residuals=(
+        "ax",
+        "ay",
+    ),
 )
 class SimpleVehicle(StateSpaceModel):
     """2D kinematics Model with acceleration limit"""
-
-    _submodel_names = ("tire_fl", "tire_fr", "tire_rl", "tire_rr", "aero")
 
     def __init__(self, model_config={}, params={}):
         super().__init__(model_config=model_config, params=params)
@@ -201,7 +202,7 @@ class SimpleVehicle(StateSpaceModel):
         aero_coeff = aero_return.outputs
 
         Fz_total = vehicle_mass * gravity + aero_coeff["Cz"] * (
-            0.5 * air_density * (vx ** 2 + vy ** 2)
+            0.5 * air_density * (vx**2 + vy**2)
         )
 
         # Compute tire load
@@ -295,7 +296,11 @@ class SimpleVehicle(StateSpaceModel):
             tire_outputs[c] = outputs
             # TODO: tire moments are not taken into account yet.
             tire_force_in_wheel_coordinate[c] = lnp.array(
-                [outputs["Fx"], outputs["Fy"] * mirror_coeff[c], wheel_load[c],]
+                [
+                    outputs["Fx"],
+                    outputs["Fy"] * mirror_coeff[c],
+                    wheel_load[c],
+                ]
             )
 
         # Transform tire forces to body coordinate
@@ -313,7 +318,7 @@ class SimpleVehicle(StateSpaceModel):
         # aero force in body coordinate
         # FIXME: drag should be absolute speed
         drag = lnp.array(
-            [-aero_coeff["Cx"] * (0.5 * air_density * (vx ** 2 + vy ** 2)), 0, 0]
+            [-aero_coeff["Cx"] * (0.5 * air_density * (vx**2 + vy**2)), 0, 0]
         )
 
         # Sum up all the forces
@@ -381,7 +386,9 @@ class SimpleVehicle(StateSpaceModel):
 
         residuals = dict(ax=ax - ax_in, ay=ay - ay_in)
         return StateSpaceModelReturn(
-            states_dot=states_dot, outputs=outputs, residuals=residuals,
+            states_dot=states_dot,
+            outputs=outputs,
+            residuals=residuals,
         )
 
     @classmethod

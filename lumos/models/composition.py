@@ -86,8 +86,6 @@ class ModelMaker:
 
 
 class CompositeModel:
-    _submodel_names: List[str] = []
-
     def __init__(
         self,
         model_config: Optional[ConfigTree] = None,
@@ -108,6 +106,12 @@ class CompositeModel:
             params = self.get_recursive_default_params()
 
         self.set_recursive_params(params)
+
+    @classmethod
+    @property
+    def _submodel_names(cls) -> List[str]:
+        submodel_config = cls.get_default_submodel_config()
+        return list(submodel_config.keys())
 
     @classmethod
     def is_leaf(cls):

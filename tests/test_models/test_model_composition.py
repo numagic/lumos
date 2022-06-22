@@ -184,8 +184,6 @@ class TestModelComposition(TestCase):
 
 
 class DummyRigidVehicle(CompositeModel):
-    _submodel_names = ("aero", "tire")
-
     @classmethod
     def get_default_submodel_config(cls):
         return {"aero": "DummyAeroWithDRS", "tire": "DummyMF52"}
@@ -196,8 +194,6 @@ class DummyRigidVehicle(CompositeModel):
 
 
 class DummyAeroWithDRS(CompositeModel):
-    _submodel_names = ("base", "drs")
-
     @classmethod
     def get_default_submodel_config(cls):
         return {"base": "DummyGPAeroBase", "drs": "DummyConstDRS"}
@@ -208,8 +204,6 @@ class DummyAeroWithDRS(CompositeModel):
 
 
 class DummyAeroWithoutDRS(CompositeModel):
-    _submodel_names = ("base",)
-
     @classmethod
     def get_default_submodel_config(cls):
         return {"base": "DummyLinearAeroBase"}
@@ -222,8 +216,6 @@ class DummyAeroWithoutDRS(CompositeModel):
 class DummyGPAeroBase(CompositeModel):
     """This is a concrete class that can be instantiated"""
 
-    _submodel_names = ()
-
     @classmethod
     def get_default_params(cls):
         return {"alpha": np.ones(128)}
@@ -232,32 +224,24 @@ class DummyGPAeroBase(CompositeModel):
 class DummyLinearAeroBase(CompositeModel):
     """This is a concrete class that can be instantiated"""
 
-    _submodel_names = ()
-
     @classmethod
     def get_default_params(cls):
         return {"weights": np.zeros(7)}
 
 
 class DummyConstDRS(CompositeModel):
-    _submodel_names = ()
-
     @classmethod
     def get_default_params(cls):
         return {"cd_delta": -0.2, "cz_delta": -0.4}
 
 
 class DummyMF52(CompositeModel):
-    _submodel_names = ()
-
     @classmethod
     def get_default_params(cls):
         return {"mux": 0.96, "muy": 0.94}
 
 
 class DummyMF62(CompositeModel):
-    _submodel_names = ()
-
     @classmethod
     def get_default_params(cls):
         return {"mux": 0.96, "muy": 0.94, "thermal_coeff": 0.3}
