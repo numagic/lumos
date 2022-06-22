@@ -108,15 +108,19 @@ class CompositeModel:
         self.set_recursive_params(params)
 
     @classmethod
-    @property
-    def _submodel_names(cls) -> List[str]:
+    def get_submodel_names(cls) -> List[str]:
+        """Return the names of the submodels.
+
+        Returns:
+            List[str]: names of the direct child submodels of the current model.
+        """
         submodel_config = cls.get_default_submodel_config()
         return list(submodel_config.keys())
 
     @classmethod
     def is_leaf(cls):
         """A model is a leaf model if it doesn't have submodels."""
-        return not (cls._submodel_names)
+        return not (cls.get_submodel_names())
 
     @classmethod
     def get_default_submodel_config(cls) -> Dict[str, ConfigTree]:
@@ -142,7 +146,7 @@ class CompositeModel:
 
     def _build_submodels(self, submodel_config: Dict[str, ConfigTree]):
         """Build the direct submodels using given model configs."""
-        for name in self._submodel_names:
+        for name in self.get_submodel_names():
             self._submodels[name] = ModelMaker.make_model_from_config(
                 submodel_config[name]
             )
