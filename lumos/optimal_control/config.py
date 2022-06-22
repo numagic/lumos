@@ -91,6 +91,7 @@ class SimConfig:
     boundary_conditions: Tuple[BoundaryConditionConfig] = ()
     bounds: Tuple[BoundConfig] = ()
     scales: Tuple[ScaleConfig] = ()
+    con_output_names: Tuple[str] = ()
     logging_config: Optional[LoggingConfig] = None
 
     def __post_init__(self):

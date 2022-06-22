@@ -48,6 +48,7 @@ class TestFixedDistanceCondensed(unittest.TestCase):
                 is_condensed=True,
                 backend="casadi",
                 transcription="LGR",
+                con_output_names=("sin_theta",),
                 scales=(
                     ScaleConfig("states", "x", 10.0),
                 ),  # Sometimes things only work with scales =1, we need to catch it
@@ -378,7 +379,9 @@ class TestLaptimeSimulationSolve(unittest.TestCase):
                             self.solution, group=group, name=name, stage=-1
                         )
                         self.assertAlmostEqual(
-                            start_value, end_value, delta=1e-3,
+                            start_value,
+                            end_value,
+                            delta=1e-3,
                         )
         else:
             # we just test that velocities are different, as there is no guarantee that

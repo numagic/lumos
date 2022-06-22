@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import numpy as np
 
@@ -18,7 +18,7 @@ class FixedMeshOCP(ScaledMeshOCP):
     """Optimal Control problem where the mesh is fixed"""
 
     # No Global variables
-    global_var_names = []
+    global_var_names: Tuple[str] = ()
 
     def __init__(
         self,
