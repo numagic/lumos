@@ -98,20 +98,26 @@ class BaseConstraints:
             self.has_hessian_sparsity = True
             self._hessian_structure = hessian_structure
 
-        # HACK: no inputs wired yet, just set the default
-        self.set_con_scales()
+        # Set the default scales
+        self._input_scales = np.ones(self.num_in)
+        self._con_scales = np.ones(self.num_con)
+        self.update_jac_scales()
+        self.update_hess_scales()
 
     def constraints(self, x):
-        return self._constraints(x) / self._con_scales
+        return self._constraints(x * self._input_scales) / self._con_scales
 
     def jacobian(self, x):
-        return self._jacobian(x) / self._jac_scales
+        return self._jacobian(x * self._input_scales) / self._jac_scales
 
     def hessian(self, x, lagrange):
         # Scaling the contribution of the constraints to the hessian is equivalent to
         # scaling the lagrangian multipliers corresponding to the constraints
 
-        return self._hessian(x, lagrange / self._con_scales)
+        return (
+            self._hessian(x * self._input_scales, lagrange / self._con_scales)
+            / self._hess_scales
+        )
 
     def jacobianstructure(self):
         return self._jacobian_structure
@@ -135,15 +141,34 @@ class BaseConstraints:
             (vals.ravel(), (rows.ravel(), cols.ravel())), shape=self.hess_shape
         )
 
-    def set_con_scales(self, scales: Optional[np.ndarray] = None):
-        if scales is not None:
-            self._con_scales = scales
-        else:
-            self._con_scales = np.ones(self.num_con)
+    def set_input_scales(self, scales: np.ndarray):
+        self._input_scales = scales
+        self.update_jac_scales()
+        self.update_hess_scales()
 
+    def set_con_scales(self, scales: np.ndarray):
+        self._con_scales = scales
+        self.update_jac_scales()
+
+    def update_jac_scales(self):
+        """Update the jacobian scale.
+
+        The jacobian is represented in a sparse format, so we only needs an array to
+        scale the jac values. This needs to be called when the input and con are scaled.
+
+        f:          y=f(x)
+        f_scaled:   y_scaled = f(x_scaled*input_scale)/con_scale
+        df_scaled/dx_scaled = df/dx / jac_scales
+
+        where jac_scales for the entry of (row, col) has value (con_scale/input_scale)
+        """
         # update jacobian value scales.
         rows, cols = self.jacobianstructure()
-        self._jac_scales = self._con_scales[rows]
+        self._jac_scales = self._con_scales[rows] / self._input_scales[cols]
+
+    def update_hess_scales(self):
+        rows, cols = self.hessianstructure()
+        self._hess_scales = 1 / (self._input_scales[rows] * self._input_scales[cols])
 
     @property
     def jac_shape(self):
@@ -300,15 +325,44 @@ class LinearConstraints(BaseConstraints):
 class BaseObjective:
     def __init__(
         self,
+        num_in: int,
         objective: Callable,
         gradient: Callable,
         hessian: Callable,
-        hessian_structure: Tuple[np.ndarray, np.ndarray],
+        hessian_structure: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     ):
-        self.objective = objective
-        self.gradient = gradient
-        self.hessian = hessian
-        self.hessianstructure = lambda: hessian_structure
+        self.num_in = num_in
+        self._objective = objective
+        self._gradient = gradient
+        self._hessian = hessian
+        if hessian_structure is None:
+            self._hessian_structure = np.nonzero(np.ones((num_in, num_in)))
+        else:
+            self._hessian_structure = hessian_structure
+
+        # Set the default scales
+        self._input_scales = np.ones(self.num_in)
+        self.update_hess_scales()
+
+    def set_input_scales(self, scales: np.ndarray):
+        self._input_scales = scales
+        self.update_hess_scales()
+
+    def update_hess_scales(self):
+        rows, cols = self.hessianstructure()
+        self._hess_scales = 1 / (self._input_scales[rows] * self._input_scales[cols])
+
+    def objective(self, x):
+        return self._objective(x * self._input_scales)
+
+    def gradient(self, x):
+        return self._gradient(x * self._input_scales) * self._input_scales
+
+    def hessianstructure(self):
+        return self._hessian_structure
+
+    def hessian(self, x):
+        return self._hessian(x * self._input_scales) / self._hess_scales
 
 
 class NLPFunction(ABC):
@@ -326,7 +380,8 @@ class NLPFunction(ABC):
         pass
 
     def objective(self, x):
-        # Store last iter decision variable, and then call the real objective functions
+        # Store unscaled last iter decision variable, and then call the real objective
+        # functions
         # NOTE: during initial tracing, the type of x would be a jax tracer object
         # but later it will be just numpy array.
         #
@@ -382,17 +437,26 @@ class NLPFunction(ABC):
 
         return np.triu_indices(self.num_dec)
 
-    def _construct_ipopt_problem(self, ipopt_options: Dict[str, Any]):
+    def _construct_ipopt_problem(
+        self, ipopt_options: Dict[str, Any], dec_var_scales: Optional[np.ndarray] = None
+    ):
         """Construct an ipopt problem object"""
 
-        # TODO: we might want to make this a completely separaete class, independent of
-        # the OCP.
+        # TODO: Is this the best place to scale the lower and upper bounds?
+        # Advantage:
+        # 1) the user doesn't need to touch scaled variables ever (just unscaled ones
+        # in their more understandable units)
+        # 2) we still have .lb and .ub as unscaled versions, which the user can more
+        # easily check and use
+        # Disadvantage:
+        # 1) the handling of scales are a little bit scattered, making future dev/debug
+        # potentially more difficult
         nlp = cyipopt.Problem(
             n=self.num_dec,
             m=self.num_con,
             problem_obj=self,  # this is particularly concerning...
-            lb=self.lb,
-            ub=self.ub,
+            lb=self.lb / self._dec_var_scales,
+            ub=self.ub / self._dec_var_scales,
             cl=self.cl,
             cu=self.cu,
         )
@@ -453,13 +517,16 @@ class NLPFunction(ABC):
         ipopt_options.update(user_options)
         nlp = self._construct_ipopt_problem(ipopt_options)
 
-        # Set decision variable scaling: x_hat = scale*x
-        nlp.set_problem_scaling(x_scaling=self._dec_var_scales)
-
         if init_guess is None:
             init_guess = self.get_init_guess()
 
-        x, info = nlp.solve(init_guess, lagrange=lagrange, zl=zl, zu=zu)
+        # scale initial guess
+        scaled_init_guess = init_guess / self._dec_var_scales
+
+        # Solve the scaled problem
+        # TODO: we still need to handle the scaling of the lagrangian multipliers for
+        # the constraints as well as for the bounds.
+        scaled_sol, info = nlp.solve(scaled_init_guess, lagrange=lagrange, zl=zl, zu=zu)
 
         # Raise error if the optimization runs into an error
         # Some errors such as nan etc don't actually raise an error in cyipopt, but we
@@ -492,7 +559,9 @@ class NLPFunction(ABC):
                         if match:
                             info[name] = float(match[0])
 
-        return x, info
+        # Unscale solution before return
+        sol = scaled_sol * self._dec_var_scales
+        return sol, info
 
     def intermediate(
         self,

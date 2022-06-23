@@ -580,19 +580,10 @@ class ScaledMeshOCP(CompositeProblem):
         """
 
         # Overwrite with external bound settings
-        op = self.dec_var_operator
         for b in bounds:
-            lb, ub = b.values
-            idx = op.get_var_index_in_dec(group=b.group, name=b.name)
-            # Convert scalar to array. Only need to check one bound as the
-            # BoundConfig ensure both are the same type
-            if not (np.isscalar(idx)) and not (np.isscalar(lb)):
-                assert len(lb) == self.num_stages, (
-                    f"OCP has {self.num_stages} stages, but got bounds for "
-                    f"{b.group}.{b.name} with size {len(lb)}"
-                )
-            self.lb[idx] = lb
-            self.ub[idx] = ub
+            self._set_var_bounds(
+                group=b.group, name=b.name, stage=None, bounds=b.values
+            )
 
         # Apply the boundary conditions again, as when we set all the bounds, the
         # boundary conditions will be overwritten.
@@ -634,9 +625,15 @@ class ScaledMeshOCP(CompositeProblem):
             var_scales[sc.group][
                 op.get_var_index_in_group(sc.group, sc.name)
             ] = sc.value
-            self._dec_var_scales[op.get_var_index_in_dec(sc.group, sc.name)] = (
-                1 / sc.value
-            )
+            self._dec_var_scales[op.get_var_index_in_dec(sc.group, sc.name)] = sc.value
+
+        # Set input scales for all objectives
+        for _, o in self._objectives.items():
+            o.set_input_scales(self._dec_var_scales)
+
+        # Set input scales for all constraints
+        for _, c in self._constraints.items():
+            c.set_input_scales(self._dec_var_scales)
 
         # Set constarint scales
         continuity_scales = np.ravel(
@@ -710,7 +707,13 @@ class ScaledMeshOCP(CompositeProblem):
         else:
             lb = ub = bounds
 
-        assert lb <= ub, "lower bound must be no larger than the upper bound"
+        if not (np.isscalar(idx_var)) and not (np.isscalar(lb)):
+            assert len(lb) == self.num_stages, (
+                f"OCP has {self.num_stages} stages, but got bounds for "
+                f"{group}.{name} with size {len(lb)}"
+            )
+
+        assert np.all(lb <= ub), "lower bound must be no larger than the upper bound"
 
         self.lb[idx_var] = lb
         self.ub[idx_var] = ub
@@ -1250,10 +1253,14 @@ class ScaledMeshOCP(CompositeProblem):
     def _build_objective(self):
         # Common objective regardless of the problem
         time_objective = BaseObjective(
+            num_in=self.num_dec,
             objective=lambda x: self._time_objective(x),
             gradient=lambda x: self._time_gradient(x),
             hessian=lambda x: np.array([]),
-            hessian_structure=(np.array([]), np.array([])),
+            hessian_structure=(
+                np.array([], dtype=np.int32),
+                np.array([], dtype=np.int32),
+            ),
         )
         self.add_objective("time", time_objective)
 
