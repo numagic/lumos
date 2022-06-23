@@ -25,7 +25,8 @@ class ModelWithWrongConOutputs(StateSpaceModel):
         outputs = self.make_dict(group="outputs", output0=0.0, output1=1.0)
 
         return self.make_state_space_model_return(
-            states_dot=states_dot, outputs=outputs,
+            states_dot=states_dot,
+            outputs=outputs,
         )
 
 
@@ -40,20 +41,25 @@ class ModelWithCorrectConOutputs(ModelWithWrongConOutputs):
 
 
 @state_space_io(
-    states=("state0", "state1"), inputs=("input0",), outputs=("output0", "output1"),
+    states=("state0", "state1"),
+    inputs=("input0",),
+    outputs=("output0", "output1"),
 )
 class ModelWithNoConOutputs(ModelWithCorrectConOutputs):
     pass
 
 
 @state_space_io(
-    states=("state0", "state1"), inputs=("input0",),
+    states=("state0", "state1"),
+    inputs=("input0",),
 )
 class ModelWithNoOutputs(StateSpaceModel):
     def forward(self, states, inputs, mesh=0.0):
         states_dot = self.make_dict(group="states", state0=0.0, state1=0.1)
 
-        return self.make_state_space_model_return(states_dot=states_dot,)
+        return self.make_state_space_model_return(
+            states_dot=states_dot,
+        )
 
 
 class TestStateSpaceModel(unittest.TestCase):
@@ -169,11 +175,11 @@ AY = 8.0
 
 
 @state_space_io(
-    states=("vx", "vy"), inputs=("throttle", "steer", "brake"), outputs=("ax", "ay"),
+    states=("vx", "vy"),
+    inputs=("throttle", "steer", "brake"),
+    outputs=("ax", "ay"),
 )
 class VehicleForTest(StateSpaceModel):
-    _submodel_names = ("powertrain", "tire")
-
     @classmethod
     def get_default_submodel_config(cls):
         return {"powertrain": "HybridPowertrain", "tire": "MF72"}
@@ -199,7 +205,8 @@ class VehicleForTest(StateSpaceModel):
         tire_return = tire_model.forward(tire_inputs)
 
         submodel_outputs = self.combine_submodel_outputs(
-            powertrain=powertrain_return.outputs, tire=tire_return.outputs,
+            powertrain=powertrain_return.outputs,
+            tire=tire_return.outputs,
         )
 
         # Make some dummy outputs
@@ -243,7 +250,8 @@ class HybridPowertrain(StateSpaceModel):
 
         # Combine all submodel outputs into a flattened dictionary
         submodel_outputs = self.combine_submodel_outputs(
-            engine=engine_return.outputs, emotor=emotor_return.outputs,
+            engine=engine_return.outputs,
+            emotor=emotor_return.outputs,
         )
 
         # Use direct current model outputs and flattened submodel outputs to form the

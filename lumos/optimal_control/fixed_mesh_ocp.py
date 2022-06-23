@@ -68,13 +68,13 @@ class FixedMeshOCP(ScaledMeshOCP):
 
     def _build_continuity_cons(self):
         """Overwrite base class to create linear constraints for continiuty.
-        
-        Since for fixed grid, the continuity is just a linear constraint. 
+
+        Since for fixed grid, the continuity is just a linear constraint.
 
         However here we do not cache the jacobian, because when the jacobian value is
         cached, then if the problem changes (for example, when the mesh_scale changes), this continuity jacobian is no
         longer valid!
-        
+
         The performance cost is < 1ms per call for 250 intervals with 3 stages per
         interval, so pretty much negligible for any problem with a non-trivial model.
         """
@@ -93,9 +93,13 @@ class FixedMeshOCP(ScaledMeshOCP):
     def _build_objective(self):
         # Common objective regardless of the problem
         time_objective = BaseObjective(
+            num_in=self.num_dec,
             objective=lambda x: self._time_objective(x),
             gradient=lambda x: self._time_gradient(x),
             hessian=lambda x: np.array([]),
-            hessian_structure=(np.array([]), np.array([])),
+            hessian_structure=(
+                np.array([], dtype=np.int32),
+                np.array([], dtype=np.int32),
+            ),
         )
         self.add_objective("time", time_objective)

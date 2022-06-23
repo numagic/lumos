@@ -64,7 +64,7 @@ class TestOCP(unittest.TestCase):
 
     def _check_constraints_scales_are_correctly_set(self, scales_dict):
         """Helper function to test scales are correctly passed to the constraints.
-        
+
         We don't test if the constraints actually output the correclty scaleds outputs.
         That is left to test_constraints.py.
 
@@ -96,26 +96,24 @@ class TestOCP(unittest.TestCase):
         """
         op = self.ocp.dec_var_operator
         x_scales = self.ocp._dec_var_scales[op.get_var_index_in_dec("states", "x")]
-        np.testing.assert_array_almost_equal(x_scales, 1 / scales_dict["x"].value)
+        np.testing.assert_array_almost_equal(x_scales, scales_dict["x"].value)
 
         omega_scales = self.ocp._dec_var_scales[
             op.get_var_index_in_dec("inputs", "omega")
         ]
-        np.testing.assert_array_almost_equal(
-            omega_scales, 1 / scales_dict["omega"].value
-        )
+        np.testing.assert_array_almost_equal(omega_scales, scales_dict["omega"].value)
 
         sin_theta_scales = self.ocp._dec_var_scales[
             op.get_var_index_in_dec("con_outputs", "sin_theta")
         ]
         np.testing.assert_array_almost_equal(
-            sin_theta_scales, 1 / scales_dict["sin_theta"].value
+            sin_theta_scales, scales_dict["sin_theta"].value
         )
 
         mesh_scale_scales = self.ocp._dec_var_scales[
             op.get_var_index_in_dec("global", "mesh_scale")
         ]
-        self.assertAlmostEqual(mesh_scale_scales, 1 / scales_dict["mesh_scale"].value)
+        self.assertAlmostEqual(mesh_scale_scales, scales_dict["mesh_scale"].value)
 
     def test_correct_scales_are_set_from_sim_config(self):
         """Test scales are correclty set from sim_config"""
@@ -309,7 +307,11 @@ class TestOCP(unittest.TestCase):
 # 2) transcription method
 # 3) problem size
 @parameterized_class(
-    ("hessian_approximation",), [("exact",), ("limited-memory",),],
+    ("hessian_approximation",),
+    [
+        ("exact",),
+        ("limited-memory",),
+    ],
 )
 class TesteOCPSolve(unittest.TestCase):
     @classmethod
@@ -354,7 +356,9 @@ class TesteOCPSolve(unittest.TestCase):
 def test_timing_extraction():
     """Test that we can correctly extract ipopt timing when available"""
     sim_config = DroneSimulation.get_sim_config(
-        num_intervals=99, hessian_approximation="exact", transcription="Trapezoidal",
+        num_intervals=99,
+        hessian_approximation="exact",
+        transcription="Trapezoidal",
     )
 
     ocp = DroneSimulation(sim_config=sim_config)
