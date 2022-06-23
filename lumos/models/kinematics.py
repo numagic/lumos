@@ -22,12 +22,17 @@ class TrackPosition2D(StateSpaceModel):
     """
 
     def __init__(
-        self, params: Dict[str, Any] = {}, model_config: Dict[str, Any] = None,
+        self,
+        params: Dict[str, Any] = {},
+        model_config: Dict[str, Any] = None,
     ):
         super().__init__(model_config=model_config, params=params)
 
     def forward(
-        self, states: lnp.ndarray, inputs: lnp.ndarray, mesh: float = 0.0,
+        self,
+        states: Dict[str, float],
+        inputs: Dict[str, float],
+        mesh: float = 0.0,
     ) -> StateSpaceModelReturn:
         """
         Sign convention:
@@ -53,7 +58,10 @@ class TrackPosition2D(StateSpaceModel):
         # Pure kinematics related calculation. This is where vehicle models will be
         # executed in the future
         states_dot = self.make_dict(
-            "states_dot", time=1 / ds_dt, n=dn_dt / ds_dt, eta=deta_dt / ds_dt,
+            "states_dot",
+            time=1 / ds_dt,
+            n=dn_dt / ds_dt,
+            eta=deta_dt / ds_dt,
         )
         outputs = self.make_dict("outputs", yaw_angle=yaw_angle, curvature=curvature)
         return self.make_state_space_model_return(

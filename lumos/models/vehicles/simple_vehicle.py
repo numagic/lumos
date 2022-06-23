@@ -110,8 +110,8 @@ class SimpleVehicle(StateSpaceModel):
 
     def forward(
         self,
-        states: lnp.ndarray,
-        inputs: lnp.ndarray,
+        states: Dict[str, float],
+        inputs: Dict[str, float],
         mesh: float = 0.0,  # time invariant
     ) -> StateSpaceModelReturn:
         """

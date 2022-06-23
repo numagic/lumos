@@ -17,14 +17,16 @@ logger = logging.getLogger(__name__)
 )
 class DroneModel(StateSpaceModel):
     def __init__(
-        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
+        self,
+        model_config: Dict[str, Any] = {},
+        params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
     def forward(
         self,
-        states: lnp.ndarray,
-        inputs: lnp.ndarray,
+        states: Dict[str, float],
+        inputs: Dict[str, float],
         mesh: float = 0.0,  # time invariant model
     ) -> StateSpaceModelReturn:
         params = self._params
@@ -43,11 +45,14 @@ class DroneModel(StateSpaceModel):
         )
 
         outputs = self.make_dict(
-            "outputs", sin_theta=lnp.sin(theta), f_omega=inputs["omega"] * inputs["f"],
+            "outputs",
+            sin_theta=lnp.sin(theta),
+            f_omega=inputs["omega"] * inputs["f"],
         )
 
         return self.make_state_space_model_return(
-            states_dot=states_dot, outputs=outputs,
+            states_dot=states_dot,
+            outputs=outputs,
         )
 
     @classmethod

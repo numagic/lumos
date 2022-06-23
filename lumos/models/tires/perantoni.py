@@ -18,7 +18,13 @@ logger = logging.getLogger(__name__)
         "vx",  # x-velocity in tire coordinate
         "gamma",  # inclination angle
     ),
-    outputs=("Fx", "Fy", "Mx", "My", "Mz",),
+    outputs=(
+        "Fx",
+        "Fy",
+        "Mx",
+        "My",
+        "Mz",
+    ),
 )
 class PerantoniTire(BaseTire):
     """Tire model used in Perantoni Paper
@@ -37,7 +43,7 @@ class PerantoniTire(BaseTire):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def forward(self, inputs: lnp.ndarray):
+    def forward(self, inputs: Dict[str, float]):
         """Perantoni Apendix A, page 32"""
         params = self._params
 
@@ -74,7 +80,7 @@ class PerantoniTire(BaseTire):
 
         # NOTE: we need to add a jitter here to avoid divide by zero error at 0 slip
         jitter = 1e-6
-        rho = lnp.sqrt(alpha_n ** 2 + kappa_n ** 2 + jitter)
+        rho = lnp.sqrt(alpha_n**2 + kappa_n**2 + jitter)
 
         Sx = np.pi / 2 / lnp.arctan(Qx)
         Sy = np.pi / 2 / lnp.arctan(Qy)

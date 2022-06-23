@@ -38,7 +38,9 @@ StateSpaceIO = namedtuple(
 
 
 def model_io(
-    inputs: Tuple[str] = (), outputs: Tuple[str] = (), residuals: Tuple[str] = (),
+    inputs: Tuple[str] = (),
+    outputs: Tuple[str] = (),
+    residuals: Tuple[str] = (),
 ):
     """Decorator to set the input and output names of a stateless model."""
 
@@ -128,7 +130,9 @@ class Model(CompositeModel):
     model_config: Dict[str, Any]
 
     def __init__(
-        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
+        self,
+        model_config: Dict[str, Any] = {},
+        params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
@@ -164,8 +168,8 @@ class Model(CompositeModel):
 
     def _collect_children_outputs(self):
         """Collect all children outputs and prefix them with submodel_name
-        
-        
+
+
         eg: the 'power' output of the 'engine' submodel becomes 'engine.power'
         """
         children_outputs = []
@@ -178,7 +182,7 @@ class Model(CompositeModel):
 
     def combine_submodel_outputs(self, **kwargs):
         """combine the outputs from submodels into large dictionary
-        
+
         kwargs: {name_of_submodel: vector_of_outputs}
         """
         combined_dict = {}
@@ -296,7 +300,7 @@ class Model(CompositeModel):
 
     def make_dict(self, group: str, **kwargs) -> Dict[str, Any]:
         """Create a dictionary from kwargs. All values must be provided.
-        
+
         This is actually just a thing wrapper on the standard dictionary construction,
         but it additionally checks if all the necessary keys exist
         """
@@ -326,14 +330,16 @@ class StateSpaceModel(Model):
     _implicit_inputs: Tuple[str]
 
     def __init__(
-        self, params: Dict[str, Any] = {}, model_config: Dict[str, Any] = {},
+        self,
+        params: Dict[str, Any] = {},
+        model_config: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
         self._check_names()
 
     @abstractmethod
     def forward(
-        self, states: lnp.ndarray, inputs: lnp.ndarray, mesh: float
+        self, states: Dict[str, float], inputs: Dict[str, float], mesh: float
     ) -> StateSpaceModelReturn:
         """The canonical form.
 
@@ -352,9 +358,9 @@ class StateSpaceModel(Model):
 
     def make_state_space_model_return(
         self,
-        states_dot: lnp.ndarray,
-        outputs: lnp.ndarray = None,
-        residuals: lnp.ndarray = None,
+        states_dot: Dict[str, float],
+        outputs: Dict[str, float] = None,
+        residuals: Dict[str, float] = None,
     ) -> StateSpaceModelReturn:
         """Thin wrapper for StateSpaceModelReturn to handle con_outputs automatically."""
         kwargs = {"states_dot": states_dot}
@@ -368,7 +374,7 @@ class StateSpaceModel(Model):
 
     def _construct_io_names(self):
         """Create model io names while also taking into account submodels compositoin.
-        
+
         Similar to Model._construct_io_names, but now needs to operate on more groups
         for state space model.
         """
@@ -480,7 +486,10 @@ class StateSpaceModel(Model):
         return dict(zip(self._implicit_inputs, list_vars))
 
     def _apply_and_flat_implicit(
-        self, flat_vars: lnp.ndarray, mesh: float, params,
+        self,
+        flat_vars: lnp.ndarray,
+        mesh: float,
+        params,
     ) -> lnp.ndarray:
         self.set_recursive_params(params)
         dict_vars = self._split_flat_vars(flat_vars)

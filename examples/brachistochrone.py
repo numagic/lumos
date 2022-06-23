@@ -53,14 +53,16 @@ class TimeModel(StateSpaceModel):
     """The Brachistochrone model formulatd in the time domain"""
 
     def __init__(
-        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
+        self,
+        model_config: Dict[str, Any] = {},
+        params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
     def forward(
         self,
-        states: lnp.ndarray,
-        inputs: lnp.ndarray,
+        states: Dict[str, float],
+        inputs: Dict[str, float],
         mesh: float = 0.0,  # time invariant model
     ) -> StateSpaceModelReturn:
         params = self._params
@@ -72,7 +74,12 @@ class TimeModel(StateSpaceModel):
         dy_dt = lnp.sin(theta) * v
 
         # Assemble result
-        states_dot = self.make_dict(group="states_dot", v=v_dot, x=dx_dt, y=dy_dt,)
+        states_dot = self.make_dict(
+            group="states_dot",
+            v=v_dot,
+            x=dx_dt,
+            y=dy_dt,
+        )
         outputs = self.make_dict(group="outputs", theta=theta)
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs
@@ -87,7 +94,9 @@ class TimeModelWithCustomDerivatives(TimeModel):
     """The Brachistochrone model formulatd in the time domain, with custom derivatives."""
 
     def __init__(
-        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
+        self,
+        model_config: Dict[str, Any] = {},
+        params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
@@ -231,14 +240,16 @@ class DistanceModel(StateSpaceModel):
     """
 
     def __init__(
-        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
+        self,
+        model_config: Dict[str, Any] = {},
+        params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
     def forward(
         self,
-        states: lnp.ndarray,
-        inputs: lnp.ndarray,
+        states: Dict[str, float],
+        inputs: Dict[str, float],
         mesh: float = 0.0,  # time invariant model
     ) -> StateSpaceModelReturn:
         params = self._params
@@ -254,7 +265,10 @@ class DistanceModel(StateSpaceModel):
         y_dot = lnp.tan(theta)
         # Assemble result
         states_dot = self.make_dict(
-            group="states_dot", time=time_dot, v=v_dot, y=y_dot,
+            group="states_dot",
+            time=time_dot,
+            v=v_dot,
+            y=y_dot,
         )
 
         return self.make_state_space_model_return(states_dot=states_dot)
