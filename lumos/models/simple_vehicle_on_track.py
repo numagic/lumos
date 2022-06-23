@@ -16,8 +16,6 @@ from lumos.models.vehicles.simple_vehicle import SimpleVehicle
     + SimpleVehicle.get_direct_group_names("residuals"),
 )
 class SimpleVehicleOnTrack(StateSpaceModel):
-    _submodel_names = ("vehicle", "kinematics")
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -29,7 +27,7 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             "kinematics": "TrackPosition2D",
         }
 
-    def forward(self, states: lnp.ndarray, inputs: lnp.ndarray, mesh: float):
+    def forward(self, states: Dict[str, float], inputs: Dict[str, float], mesh: float):
 
         # Pick out the vehicle inputs
         vehicle_inputs = {
@@ -64,7 +62,9 @@ class SimpleVehicleOnTrack(StateSpaceModel):
 
         # Pick out vehicle params. NOT DONE! NOT EASY!
         kinematics_return = self.get_submodel("kinematics").forward(
-            states=kinematic_states, inputs=kinematic_inputs, mesh=mesh,
+            states=kinematic_states,
+            inputs=kinematic_inputs,
+            mesh=mesh,
         )
 
         # Convert to distance domain derivatives
@@ -82,5 +82,7 @@ class SimpleVehicleOnTrack(StateSpaceModel):
         residuals = vehicle_return.residuals
 
         return self.make_state_space_model_return(
-            states_dot=states_dot, outputs=outputs, residuals=residuals,
+            states_dot=states_dot,
+            outputs=outputs,
+            residuals=residuals,
         )

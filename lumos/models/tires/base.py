@@ -18,7 +18,9 @@ class BaseTire(Model):
 
     @abstractmethod
     def forward(
-        self, inputs: lnp.ndarray, params: Optional[Dict[str, Any]] = None,
+        self,
+        inputs: Dict[str, float],
+        params: Optional[Dict[str, Any]] = None,
     ) -> ModelReturn:
         """Common tire model interface.
 

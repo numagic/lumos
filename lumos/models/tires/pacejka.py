@@ -218,7 +218,7 @@ class MF52(BaseTire):
 
         return params
 
-    def forward(self, inputs: lnp.ndarray) -> lnp.ndarray:
+    def forward(self, inputs: Dict[str, float]) -> lnp.ndarray:
         """Pacejka MF5.2 tire model
 
         There are essentially two sources of equations:
@@ -247,7 +247,11 @@ class MF52(BaseTire):
         alpha = inputs["alpha"]
 
         (Fx, Fy, Mx, My, Mz, Kxk, Gxa, Kya, Gyk) = self._do_force_and_moments(
-            kappa=kappa, alpha=alpha, gamma=gamma, vx=vx, Fz=Fz,
+            kappa=kappa,
+            alpha=alpha,
+            gamma=gamma,
+            vx=vx,
+            Fz=Fz,
         )
 
         outputs = dict(
@@ -260,13 +264,18 @@ class MF52(BaseTire):
             Gxa=Gxa,
             Kya=Kya,
             Gyk=Gyk,
-            GSum=lnp.sqrt(Gyk ** 2 + Gxa ** 2),
+            GSum=lnp.sqrt(Gyk**2 + Gxa**2),
         )
 
         return ModelReturn(outputs=outputs)
 
     def _do_force_and_moments(
-        self, kappa: float, alpha: float, gamma: float, vx: float, Fz: float,
+        self,
+        kappa: float,
+        alpha: float,
+        gamma: float,
+        vx: float,
+        Fz: float,
     ) -> lnp.ndarray:
         """Top level computation
 
@@ -274,7 +283,11 @@ class MF52(BaseTire):
         """
 
         starVar, primeVar, incrVar = self._calculate_basic(
-            kappa=kappa, alpha=alpha, Vcx=vx, gamma=gamma, Fz=Fz,
+            kappa=kappa,
+            alpha=alpha,
+            Vcx=vx,
+            gamma=gamma,
+            Fz=Fz,
         )
 
         Fx0, mux, Kxk = self._calculate_Fx0(
@@ -287,7 +300,10 @@ class MF52(BaseTire):
         )
 
         Fx, Gxa = self._calculate_Fx(
-            kappa=kappa, starVar=starVar, incrVar=incrVar, Fx0=Fx0,
+            kappa=kappa,
+            starVar=starVar,
+            incrVar=incrVar,
+            Fx0=Fx0,
         )
 
         Fy0, muy, Kya, SHy, SVy, By, Cy = self._calculate_Fy0(
@@ -295,7 +311,12 @@ class MF52(BaseTire):
         )
 
         Fy, Gyk, SVyk = self.calcluate_Fy(
-            Fz=Fz, kappa=kappa, Fy0=Fy0, muy=muy, starVar=starVar, incrVar=incrVar,
+            Fz=Fz,
+            kappa=kappa,
+            Fy0=Fy0,
+            muy=muy,
+            starVar=starVar,
+            incrVar=incrVar,
         )
 
         if self._opt_mode:
@@ -336,7 +357,12 @@ class MF52(BaseTire):
         return (Fx, Fy, Mx, My, Mz, Kxk, Gxa, Kya, Gyk)
 
     def _calculate_basic(
-        self, kappa: float, alpha: float, Vcx: float, gamma: float, Fz: float,
+        self,
+        kappa: float,
+        alpha: float,
+        Vcx: float,
+        gamma: float,
+        Fz: float,
     ) -> Tuple[Dict[str, float]]:
         """Corresponds to Solver.calculateBasic in mfeval
 
@@ -367,7 +393,7 @@ class MF52(BaseTire):
         # Velocities in point C (contact)
         Vcy = Vsy
         # TODO: sqrt singularity here
-        Vc = lnp.sqrt(Vcx ** 2 + Vcy ** 2)  # Velocity of wheel contact centre C,
+        Vc = lnp.sqrt(Vcx**2 + Vcy**2)  # Velocity of wheel contact centre C,
         # Not described in the book but is the same as [Eqn (3.39) Page 102 - Book]
 
         # Effect of having a tire with a different nominal load
@@ -461,7 +487,7 @@ class MF52(BaseTire):
         Cx = PCX1 * LCX  # (> 0) (4.E11)
         # NOTE: here for mux and Kxk we ignore inflation pressure effects which are only
         # in MF6.1 (PPX1, 2, 3, 4...)
-        mux = (PDX1 + PDX2 * dfz) * (1 - PDX3 * gamma ** 2) * LMUX_star  # (4.E13)
+        mux = (PDX1 + PDX2 * dfz) * (1 - PDX3 * gamma**2) * LMUX_star  # (4.E13)
         # TODO: here we don't ensure Dx is not -ve. But neither does MFeval
         # (-ve Dx should only happen when Fz is -ve or if mux is -ve, as zeta1=1.0)
         Dx = mux * Fz * zeta1  # (> 0) (4.E12)
@@ -486,7 +512,7 @@ class MF52(BaseTire):
         # TODO: here we have a discontinous function lnp.sign
         # jax: jacobian(jnp.sign)(0.0) -> 0.0, so always 0.0 derivative
         Ex = (
-            (PEX1 + PEX2 * dfz + PEX3 * dfz ** 2) * (1 - PEX4 * lnp.sign(kappax)) * LEX
+            (PEX1 + PEX2 * dfz + PEX3 * dfz**2) * (1 - PEX4 * lnp.sign(kappax)) * LEX
         )  # (<=1) (4.E14)
 
         # TODO: here we ignore limit that Ex needs to be <=1 (enforced in MFeval if
@@ -644,7 +670,7 @@ class MF52(BaseTire):
         alphay = alpha_star + SHy  # (4.E20)
         Cy = PCY1 * LCY  # (> 0) (4.E21)
         # NOTE: ignore PPY4 and PPY4 effect, MF6.1 only
-        muy = (PDY1 + PDY2 * dfz) * (1 - PDY3 * gamma_star ** 2) * LMUY_star  # (4.E23)
+        muy = (PDY1 + PDY2 * dfz) * (1 - PDY3 * gamma_star**2) * LMUY_star  # (4.E23)
         Dy = muy * Fz * zeta2  # (4.E22)
 
         # TODO: smoothen sign
@@ -859,7 +885,7 @@ class MF52(BaseTire):
         # Paper definition:
         Dt = (
             (QDZ1 + QDZ2 * dfz)
-            * (1 + QDZ3 * gamma + QDZ4 * gamma ** 2)
+            * (1 + QDZ3 * gamma + QDZ4 * gamma**2)
             * Fz
             * (R0 / Fz0_prime)
             * LTR
@@ -875,14 +901,14 @@ class MF52(BaseTire):
         # The equation has been replaced with equation (A58) from the paper.
         # Paper definition
         Bt = (
-            (QBZ1 + QBZ2 * dfz + QBZ3 * dfz ** 2)
+            (QBZ1 + QBZ2 * dfz + QBZ3 * dfz**2)
             * (1 + QBZ4 * gamma + QBZ5 * abs_gamma)
             * LKY
             / LMUY_star
         )  # (> 0) (A58)
 
         Ct = QCZ1  # (> 0) (4.E41)
-        Et = (QEZ1 + QEZ2 * dfz + QEZ3 * dfz ** 2) * (
+        Et = (QEZ1 + QEZ2 * dfz + QEZ3 * dfz**2) * (
             1 + (QEZ4 + QEZ5 * gamma) * (2.0 / lnp.pi) * lnp.arctan(Bt * Ct * alphat)
         )  # (<=1) (4.E44)
 
@@ -933,14 +959,14 @@ class MF52(BaseTire):
 
         alphar_eq = (
             lnp.arctan(
-                lnp.sqrt(lnp.tan(alphar) ** 2 + (Kxk / Kya_prime) ** 2 * kappa ** 2)
+                lnp.sqrt(lnp.tan(alphar) ** 2 + (Kxk / Kya_prime) ** 2 * kappa**2)
             )
             * sign_alphar
         )  # (A54)
 
         alphat_eq = (
             lnp.arctan(
-                lnp.sqrt(lnp.tan(alphat) ** 2 + (Kxk / Kya_prime) ** 2 * kappa ** 2)
+                lnp.sqrt(lnp.tan(alphat) ** 2 + (Kxk / Kya_prime) ** 2 * kappa**2)
             )
             * sign_alphat
         )  # (A55)
