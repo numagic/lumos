@@ -474,9 +474,10 @@ class ScaledMeshOCP(CompositeProblem):
             # If mesh_scale is a variable, then the continuity constraints also has
             # non-zero hessian entries.
             cont_rows = np.arange(self.num_dec)
-            cont_cols = np.ones(self.num_dec) * (self.num_dec - 1)
+            cont_cols = np.ones(self.num_dec, dtype=np.int) * (self.num_dec - 1)
             rows = np.hstack([rows.ravel(), cont_rows])
             cols = np.hstack([cols.ravel(), cont_cols])
+
         return rows, cols
 
     def _create_mesh(self):

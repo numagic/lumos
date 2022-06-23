@@ -60,10 +60,12 @@ class TestFixedDistanceCondensed(unittest.TestCase):
         # has a 'sensitive' valid input range? Otherwise the model behaves odd and make
         # the finite difference or the AD part blow up?
         cls.x0 = np.random.randn(cls.ocp.num_dec)
+        cls.x0_scaled = cls.x0 / cls.ocp._dec_var_scales
 
     def test_condensed_constraints(self):
         """Condensed constraints should agree with manually constructed ones."""
-        cons = self.ocp._constraints["model_algebra"].constraints(self.x0)
+        # Need to call constraints with scaled x0
+        cons = self.ocp._constraints["model_algebra"].constraints(self.x0_scaled)
         # The manually constructed is unscaled, so we need to unscale the scaled con
         unscaled_cons = cons * self.ocp._constraints["model_algebra"]._con_scales
         op = self.ocp.dec_var_operator
