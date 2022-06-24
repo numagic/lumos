@@ -115,7 +115,7 @@ class TestStateSpaceModel(unittest.TestCase):
                     np.random.randn(len(missing_essential_names)),
                 )
             )
-            with self.assertRaises(ValueError) as context:
+            with self.assertRaises(KeyError) as context:
                 vec = self.model.make_vector(group=group, **var_dict)
 
             # Missing some essential names but has extra names
@@ -128,7 +128,7 @@ class TestStateSpaceModel(unittest.TestCase):
                     np.random.randn(len(missing_essential_but_with_extra_names)),
                 )
             )
-            with self.assertRaises(ValueError) as context:
+            with self.assertRaises(KeyError) as context:
                 vec = self.model.make_vector(group=group, **var_dict)
 
     def test_extract_con_outputs(self):
@@ -180,6 +180,10 @@ AY = 8.0
     outputs=("ax", "ay"),
 )
 class VehicleForTest(StateSpaceModel):
+    # attributes used for introducing error and test exception
+    forget_submodel_call: bool = False
+    extra_submodel_call: bool = False
+
     @classmethod
     def get_default_submodel_config(cls):
         return {"powertrain": "HybridPowertrain", "tire": "MF72"}
@@ -189,28 +193,30 @@ class VehicleForTest(StateSpaceModel):
         throttle = inputs["throttle"]
 
         # Call powertrain model
-        powertrain_model = self.get_submodel("powertrain")
-        powertrain_inputs = powertrain_model.make_dict("inputs", demand=throttle)
-        powertrain_states = powertrain_model.make_dict(
-            "states", engine_speed=vx / 100.0
-        )
-
-        powertrain_return = powertrain_model.forward(
-            powertrain_states, powertrain_inputs, 0.0
+        powertrain_return = self.call_submodel(
+            "powertrain",
+            states={"engine_speed": vx / 100.0},
+            inputs={"demand": throttle},
+            mesh=0.0,
         )
 
         # Call tire model
-        tire_model = self.get_submodel("tire")
-        tire_inputs = tire_model.make_const_dict("inputs", 0.3)
-        tire_return = tire_model.forward(tire_inputs)
-
-        submodel_outputs = self.combine_submodel_outputs(
-            powertrain=powertrain_return.outputs,
-            tire=tire_return.outputs,
-        )
+        tire_inputs = self.get_submodel("tire").make_const_dict("inputs", 0.3)
+        if self.forget_submodel_call:
+            # forget to call a submodel, should raise an error
+            pass
+        elif self.extra_submodel_call:
+            # make duplicate call to the same submodel before clearing buffer, should
+            # raise an error
+            tire_return = self.call_submodel("tire", inputs=tire_inputs)
+            tire_return = self.call_submodel("tire", inputs=tire_inputs)
+        else:
+            # the correct way of doing it, just call the submodel once
+            tire_return = self.call_submodel("tire", inputs=tire_inputs)
 
         # Make some dummy outputs
-        outputs = self.make_dict("outputs", ax=AX, ay=AY, **submodel_outputs)
+        outputs = self.make_outputs_dict(ax=AX, ay=AY)
+
         states_dot = self.make_dict("states_dot", vx=0.1, vy=0.2)
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs
@@ -237,30 +243,18 @@ class HybridPowertrain(StateSpaceModel):
         states_dot = self.make_dict("states_dot", engine_speed=-25.0)
 
         # Call engine
-        engine_model = self.get_submodel("engine")
-        engine_inputs = engine_model.make_dict("inputs", demand=demand * engine_ratio)
-        engine_return = engine_model.forward(engine_inputs)
+        engine_inputs = {"demand": demand * engine_ratio}
+        engine_return = self.call_submodel("engine", inputs=engine_inputs)
 
         # Call e-motor
-        emotor_model = self.get_submodel("emotor")
-        emotor_inputs = emotor_model.make_dict(
-            "inputs", demand=(1 - demand) * engine_ratio
-        )
-        emotor_return = emotor_model.forward(emotor_inputs)
-
-        # Combine all submodel outputs into a flattened dictionary
-        submodel_outputs = self.combine_submodel_outputs(
-            engine=engine_return.outputs,
-            emotor=emotor_return.outputs,
-        )
+        emotor_inputs = {"demand": (1 - demand) * engine_ratio}
+        emotor_return = self.call_submodel("emotor", inputs=emotor_inputs)
 
         # Use direct current model outputs and flattened submodel outputs to form the
         # combined outputs vector.
-        outputs = self.make_dict(
-            "outputs",
+        outputs = self.make_outputs_dict(
             total_power=TOTAL_POWER,
             total_torque=TOTAL_TORQUE,
-            **submodel_outputs
         )
         return self.make_state_space_model_return(
             outputs=outputs, states_dot=states_dot
@@ -344,19 +338,52 @@ class TestOutputsCollection(unittest.TestCase):
         states = base_model.make_const_dict("states", 0.1)
         inputs = base_model.make_const_dict("inputs", 0.5)
 
-        base_model_return = base_model.forward(states, inputs, 0.0)
-        outputs = base_model_return.outputs
+        global ENGINE_POWER, ENGINE_TORQUE
+        for _ in range(10):
+            # We increment the global value so that the outputs of the model should
+            # change. This is to ensure the buffer for submodel returns are correctly
+            # updated and clearned at every call.
+            ENGINE_POWER += 1.7
+            ENGINE_TORQUE += 3.2
+            base_model_return = base_model.forward(states, inputs, 0.0)
+            outputs = base_model_return.outputs
 
-        # Check grand children outputs
-        self.assertAlmostEqual(outputs["powertrain.engine.power"], ENGINE_POWER)
-        self.assertAlmostEqual(outputs["powertrain.engine.torque"], ENGINE_TORQUE)
-        self.assertAlmostEqual(outputs["powertrain.emotor.power"], EMOTOR_POWER)
-        self.assertAlmostEqual(outputs["powertrain.emotor.torque"], EMOTOR_TORQUE)
+            # Check grand children outputs
+            self.assertAlmostEqual(outputs["powertrain.engine.power"], ENGINE_POWER)
+            self.assertAlmostEqual(outputs["powertrain.engine.torque"], ENGINE_TORQUE)
+            self.assertAlmostEqual(outputs["powertrain.emotor.power"], EMOTOR_POWER)
+            self.assertAlmostEqual(outputs["powertrain.emotor.torque"], EMOTOR_TORQUE)
 
-        # Check child outputs
-        self.assertAlmostEqual(outputs["powertrain.total_power"], TOTAL_POWER)
-        self.assertAlmostEqual(outputs["powertrain.total_torque"], TOTAL_TORQUE)
+            # Check child outputs
+            self.assertAlmostEqual(outputs["powertrain.total_power"], TOTAL_POWER)
+            self.assertAlmostEqual(outputs["powertrain.total_torque"], TOTAL_TORQUE)
 
-        # Check top level outputs
-        self.assertAlmostEqual(outputs["ax"], AX)
+            # Check top level outputs
+            self.assertAlmostEqual(outputs["ax"], AX)
         self.assertAlmostEqual(outputs["ay"], AY)
+
+    def test_exceptions_are_raised_when_missing_submodel_call(self):
+        base_config = ModelMaker.make_config("VehicleForTest")
+        base_model = ModelMaker.make_model_from_config(base_config)
+        # Make the model forget to call a submodel
+        base_model.forget_submodel_call = True
+
+        states = base_model.make_const_dict("states", 0.1)
+        inputs = base_model.make_const_dict("inputs", 0.5)
+
+        with self.assertRaises(KeyError) as context:
+            base_model_return = base_model.forward(states, inputs, 0.0)
+            outputs = base_model_return.outputs
+
+    def test_exceptions_are_raised_when_extra_submodel_call(self):
+        base_config = ModelMaker.make_config("VehicleForTest")
+        base_model = ModelMaker.make_model_from_config(base_config)
+        # Make the model make an extra call the same submodel
+        base_model.extra_submodel_call = True
+
+        states = base_model.make_const_dict("states", 0.1)
+        inputs = base_model.make_const_dict("inputs", 0.5)
+
+        with self.assertRaises(RuntimeError) as context:
+            base_model_return = base_model.forward(states, inputs, 0.0)
+            outputs = base_model_return.outputs

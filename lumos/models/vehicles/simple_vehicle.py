@@ -192,13 +192,11 @@ class SimpleVehicle(StateSpaceModel):
             "rr": total_brake_torque * (1 - brake_balance) * 0.5,
         }
 
-        aero_model = self.get_submodel("aero")
-
         # FIXME: we use some dummy inputs for speed evaluation only for now.
         aero_inputs = dict(front_ride_height=vx, rear_ride_height=vy, yaw=yaw_rate)
 
         # FIXME: aero sign convention
-        aero_return = self.get_submodel("aero").forward(aero_inputs)
+        aero_return = self.call_submodel("aero", inputs=aero_inputs)
         aero_coeff = aero_return.outputs
 
         Fz_total = vehicle_mass * gravity + aero_coeff["Cz"] * (
@@ -290,7 +288,7 @@ class SimpleVehicle(StateSpaceModel):
                 gamma=0.0 * mirror_coeff[c],  # TODO: hardcoded for now
             )
 
-            outputs = self.get_submodel("tire_" + c).forward(inputs).outputs
+            outputs = self.call_submodel("tire_" + c, inputs=inputs).outputs
 
             # TODO: store the outputs, but in a nicer way.
             tire_outputs[c] = outputs
@@ -354,16 +352,7 @@ class SimpleVehicle(StateSpaceModel):
             wheel_speed_rr=wheel_speed_dot["rr"],
         )
 
-        submodel_outputs = self.combine_submodel_outputs(
-            aero=aero_return.outputs,
-            tire_fl=tire_outputs["fl"],
-            tire_fr=tire_outputs["fr"],
-            tire_rl=tire_outputs["rl"],
-            tire_rr=tire_outputs["rr"],
-        )
-
-        outputs = self.make_dict(
-            "outputs",
+        outputs = self.make_outputs_dict(
             ax=ax,
             ay=ay,
             drive_torque_rl=drive_torque_rl,
@@ -381,7 +370,6 @@ class SimpleVehicle(StateSpaceModel):
             Fy_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.Y],
             Fz_tire_rr=tire_force_in_body_coordinate["rr"][Vector3dEnum.Z],
             **slips,
-            **submodel_outputs,
         )
 
         residuals = dict(ax=ax - ax_in, ay=ay - ay_in)

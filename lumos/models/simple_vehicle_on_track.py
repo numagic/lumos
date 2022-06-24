@@ -40,8 +40,8 @@ class SimpleVehicleOnTrack(StateSpaceModel):
         }
 
         # Pick out vehicle params. NOT DONE! NOT EASY!
-        vehicle_return = self.get_submodel("vehicle").forward(
-            states=vehicle_states, inputs=vehicle_inputs
+        vehicle_return = self.call_submodel(
+            "vehicle", states=vehicle_states, inputs=vehicle_inputs
         )
 
         # Call Kinematics model
@@ -61,7 +61,8 @@ class SimpleVehicleOnTrack(StateSpaceModel):
         kinematic_inputs = dict(**track_inputs, **inputs_from_vehicle)
 
         # Pick out vehicle params. NOT DONE! NOT EASY!
-        kinematics_return = self.get_submodel("kinematics").forward(
+        kinematics_return = self.call_submodel(
+            "kinematics",
             states=kinematic_states,
             inputs=kinematic_inputs,
             mesh=mesh,
@@ -74,10 +75,8 @@ class SimpleVehicleOnTrack(StateSpaceModel):
             **{k: v * dt_ds for k, v in vehicle_return.states_dot.items()},
         }
 
-        # Assemble final outputs
-        outputs = self.combine_submodel_outputs(
-            vehicle=vehicle_return.outputs, kinematics=kinematics_return.outputs
-        )
+        # Assemble final outputs - there are no direct outputs from the current one
+        outputs = self.make_outputs_dict()
 
         residuals = vehicle_return.residuals
 
