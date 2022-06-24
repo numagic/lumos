@@ -122,13 +122,6 @@ class ArrayStateSpaceModelReturn(NamedTuple):
 class Model(CompositeModel):
     """Abstract class for mathematical models of the simplest form."""
 
-    # parameters of the model.
-    # TODO: need to constrain this more.
-    _params: Dict[str, Any]
-
-    # TODO: not designed yet
-    model_config: Dict[str, Any]
-
     def __init__(
         self,
         model_config: Dict[str, Any] = {},
@@ -138,6 +131,10 @@ class Model(CompositeModel):
 
         # Build instance specific name attributes
         self._construct_io_names()
+
+        # Construct a buffer for submodel returns. This is used for automatic outputs
+        # collection, and cleared with a _combine_submodel_outputs call
+        self._clear_submodel_return_buffer()
 
     @abstractmethod
     def forward(self, *args, **kwargs):
@@ -169,7 +166,6 @@ class Model(CompositeModel):
     def _collect_children_outputs(self):
         """Collect all children outputs and prefix them with submodel_name
 
-
         eg: the 'power' output of the 'engine' submodel becomes 'engine.power'
         """
         children_outputs = []
@@ -180,17 +176,91 @@ class Model(CompositeModel):
                 ]
         return children_outputs
 
-    def combine_submodel_outputs(self, **kwargs):
+    def _clear_submodel_return_buffer(self):
+        """Create a clear submodel return buffer.
+
+        The buffer is used for saving submodel returns after 'call_submodel'. The saved
+        submodel returns will then be used for automatic outputs collection.
+
+        The buffer must be cleared (done in _combine_submodel_outputs) before a new
+        round of submodel calls.
+        """
+        self._submodel_return_buffer = {n: None for n in self.get_submodel_names()}
+
+    def call_submodel(self, submodel_name: str, **kwargs) -> ModelReturn:
+        """Call a submodel with keyword arguments
+
+        Args:
+            submodel_name (str): name of the submodel
+
+        Raises:
+            RuntimeError: if the submodel has already been called and its results stored
+                in the buffer. This can happen if the same submodel is called a second
+                time before the buffer is cleared.
+
+        Returns:
+            ModelReturn: the return from the submodel.
+
+        This is the intended way for the user to call the submodels, instead of getting
+        the submodel and calling it, as it also handles automatic submodel output
+        collections.
+        """
+
+        # We call this first because it also handles errors where we retire the wrong
+        # submodel
+        submodel = self.get_submodel(submodel_name)
+
+        # Make sure the submodel_returns is not populated yet. As we want to make sure
+        # we always clear it before we call the submodel again to avoid result
+        # contamination
+        if self._submodel_return_buffer[submodel_name] is not None:
+            raise RuntimeError(
+                f"submodel {submodel_name} is called again before the corresponding submodel "
+                "return buffer is cleared. "
+            )
+
+        # Check the required inputs are provided to the submodel (this is also why we
+        # only support kwargs here)
+        groups_to_check = ["inputs"]
+        if isinstance(submodel, StateSpaceModel):
+            groups_to_check.append("states")
+
+        for group in groups_to_check:
+            submodel._check_keys(group, kwargs[group])
+
+        submodel_return = submodel.forward(**kwargs)
+
+        # Store result in buffer
+        self._submodel_return_buffer[submodel_name] = submodel_return
+
+        return submodel_return
+
+    def _combine_submodel_outputs(self):
         """combine the outputs from submodels into large dictionary
 
-        kwargs: {name_of_submodel: vector_of_outputs}
+        It also:
+        - checks that all submodel returns are already populated in the buffer
+        - clears the buffer after the results are collected (so that we are ready for
+        the next round of 'forward' call)
         """
+
         combined_dict = {}
-        for submodel_name, submodel_outputs in kwargs.items():
+        for submodel_name, submodel_return in self._submodel_return_buffer.items():
+
+            # Check if results already exist in the buffer
+            if submodel_return is None:
+                raise KeyError(
+                    f"submodel_return for {submodel_name} does not exist "
+                    "in the buffer. Did you call `call_submodel` on it?"
+                )
+
             # TODO: maybe we could convert the following to a helper method?
             combined_dict.update(
-                {submodel_name + "." + n: v for n, v in submodel_outputs.items()}
+                {submodel_name + "." + n: v for n, v in submodel_return.outputs.items()}
             )
+
+        # Clear buffer
+        self._clear_submodel_return_buffer()
 
         return combined_dict
 
@@ -289,9 +359,7 @@ class Model(CompositeModel):
                     " These values are ignored."
                 )
             else:
-                raise ValueError(
-                    f"Missing {group} values for {expected_set - input_set}"
-                )
+                raise KeyError(f"Missing {group} values for {expected_set - input_set}")
 
     def make_vector(self, group: str, **kwargs) -> lnp.ndarray:
         """Create a state vector from kwargs. All values must be provided."""
@@ -310,6 +378,14 @@ class Model(CompositeModel):
     def make_const_dict(self, group, value: float) -> Dict[str, Any]:
         """Create a dictionary for a group filled with constant values."""
         return {n: value for n in self.get_group_names(group)}
+
+    def make_outputs_dict(self, **kwargs) -> Dict[str, Any]:
+        """As make_dict, but specific for outputs due to submodel outputs collection."""
+
+        submodel_outputs = self._combine_submodel_outputs()
+
+        # Create an outputs with the current model outputs in kwargs, and submodel_outputs
+        return self.make_dict(group="outputs", **kwargs, **submodel_outputs)
 
     def plot(self, *args, **kwargs):
         raise NotImplementedError

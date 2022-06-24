@@ -162,6 +162,11 @@ class CompositeModel:
 
         model = self
         for name in path_to_submodel:
+            if name not in model._submodels:
+                raise KeyError(
+                    f"{name} is not a valid submodel of {type(model)}. "
+                    "Valid ones are {model.get_submodel_names()}"
+                )
             model = model._submodels[name]
 
         return model
