@@ -15,7 +15,8 @@ disp("loading test data ...")
 data = load(data_file);
 
 disp("executing model with test data ...")
-[states_dot, outputs, con_outputs, residuals] = forward(data.states, data.inputs, data.mesh, data.params);
+cmd = sprintf("[states_dot, outputs, con_outputs, residuals] = %s(data.states, data.inputs, data.mesh, data.params);", args{1})
+eval(cmd);
 
 disp("check results against test data ...")
 % Check results, pay attention to the transpose as python is row major
