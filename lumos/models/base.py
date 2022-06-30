@@ -843,14 +843,14 @@ class StateSpaceModel(Model):
             **implicit_functions,
         )
 
-    def export_c_mex(
+    def export_c_code(
         self,
         cfile: str,
         CasType: type = cas.MX,
         options: Dict[str, Any] = None,
         includes: List[str] = None,
     ):
-        """Export a state space model into c-code that is ready for mex.
+        """Export a state space model into c-code using the casadi backend.
 
         The exported function has the following API:
 

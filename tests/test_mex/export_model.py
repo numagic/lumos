@@ -4,13 +4,13 @@ import scipy.io as sio
 from lumos.models.composition import ModelMaker
 
 
-def export_c_mex_and_data(file_name: str, options, includes):
+def export_c_code_and_data(file_name: str, options, includes):
     """Export a state space model as c-code and data from recorded I/O"""
     # Create the model
     model = ModelMaker.make_model_from_name("SimpleVehicle")
 
     # Export c-code
-    model.export_c_mex(f"{file_name}.c", options=options, includes=includes)
+    model.export_c_code(f"{file_name}.c", options=options, includes=includes)
 
     # Export some data that can be used for testing (to check if execution in mex gives
     # the same results as in python)
@@ -60,4 +60,4 @@ if __name__ == "__main__":
     #     "with_header": True,
     # }
     # includes = ["simstruc.h"]
-    export_c_mex_and_data(sys.argv[1], options, includes)
+    export_c_code_and_data(sys.argv[1], options, includes)
