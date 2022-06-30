@@ -770,7 +770,7 @@ class StateSpaceModel(Model):
 
         codegen.add(
             cas.Function(
-                filename, [states, inputs, mesh, cas_flat_params], [*model_return]
+                "forward", [states, inputs, mesh, cas_flat_params], [*model_return]
             )
         )
         codegen.add(
