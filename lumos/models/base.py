@@ -4,7 +4,7 @@ import subprocess
 from abc import abstractmethod
 from collections import namedtuple
 from os.path import exists, getsize
-from typing import Any, Dict, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import casadi as cas
 import numpy as np
@@ -843,8 +843,14 @@ class StateSpaceModel(Model):
             **implicit_functions,
         )
 
-    def export_c_mex(self, cfile: str, CasType: type = cas.MX):
-        """Export a state space model into c-code that is ready for mex.
+    def export_c_code(
+        self,
+        cfile: str,
+        CasType: type = cas.MX,
+        options: Dict[str, Any] = None,
+        includes: List[str] = None,
+    ):
+        """Export a state space model into c-code using the casadi backend.
 
         The exported function has the following API:
 
@@ -855,6 +861,9 @@ class StateSpaceModel(Model):
             cfile (str): path of the c-file for export, includg .c extension. Limited to
                 current working directory only.
             CasType (type, optional): casadi type to use, SX or MX. Defaults to MX.
+            options (Dict[str, Any], optional): code generator options for casadi. See:
+            https://web.casadi.org/docs/#generating-c-code. Defaults to None.
+            includes (List[str], optional): header files to include. Defaults to None.
 
         """
         # FIXME: path management, currently local directory only, which is a limitation
@@ -876,13 +885,18 @@ class StateSpaceModel(Model):
             )
 
         # Generate code
-        codegen = cas.CodeGenerator(cfile, dict(mex=True, main=True))
-
+        if options is None:
+            options = {}
+        codegen = cas.CodeGenerator(cfile, options)
         codegen.add(
             cas.Function(
                 "forward", [states, inputs, mesh, cas_flat_params], [*model_return]
             )
         )
+
+        if includes:
+            for inc in includes:
+                codegen.add_include(inc)
 
         codegen.generate()
 

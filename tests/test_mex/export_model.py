@@ -4,13 +4,13 @@ import scipy.io as sio
 from lumos.models.composition import ModelMaker
 
 
-def export_c_mex_and_data(file_name: str):
+def export_c_code_and_data(file_name: str, options, includes):
     """Export a state space model as c-code and data from recorded I/O"""
     # Create the model
     model = ModelMaker.make_model_from_name("SimpleVehicle")
 
     # Export c-code
-    model.export_c_mex(f"{file_name}.c")
+    model.export_c_code(f"{file_name}.c", options=options, includes=includes)
 
     # Export some data that can be used for testing (to check if execution in mex gives
     # the same results as in python)
@@ -48,4 +48,16 @@ def export_c_mex_and_data(file_name: str):
 if __name__ == "__main__":
     # Takes 1 commandline input for the file name
     # sys.argv is what follows 'python3'
-    export_c_mex_and_data(sys.argv[1])
+
+    # For matlab mex function
+    options = {"mex": True}
+    includes = []
+
+    # For s-function as described in: https://web.casadi.org/blog/s-function/
+    # options = {
+    #     "casadi_real": "real_T",
+    #     "casadi_int": "int_T",
+    #     "with_header": True,
+    # }
+    # includes = ["simstruc.h"]
+    export_c_code_and_data(sys.argv[1], options, includes)
