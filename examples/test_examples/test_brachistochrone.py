@@ -16,11 +16,13 @@ class TestBrachistochrone(TestCase):
 
         This is harder to converge, and then to be less robust.
         """
-        t = solve_brachistochrone(1.0, -0.65, time_domain=False)
+        t, info = solve_brachistochrone(1.0, -0.65, time_domain=False)
+        self.assertEqual(info["status"], 0)
         self.assertAlmostEqual(t, 0.566, places=3)
 
     @parameterized.expand(["jax", "casadi", "custom"])
     def test_time_domain(self, backend: str):
         """Test time based formulation, with scaled grid."""
-        t = solve_brachistochrone(1.0, -0.65, backend=backend)
+        t, info = solve_brachistochrone(1.0, -0.65, backend=backend)
+        self.assertEqual(info["status"], 0)
         self.assertAlmostEqual(t, 0.566, places=3)
