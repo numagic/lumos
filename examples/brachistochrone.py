@@ -53,9 +53,7 @@ class TimeModel(StateSpaceModel):
     """The Brachistochrone model formulatd in the time domain"""
 
     def __init__(
-        self,
-        model_config: Dict[str, Any] = {},
-        params: Dict[str, Any] = {},
+        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
@@ -74,12 +72,7 @@ class TimeModel(StateSpaceModel):
         dy_dt = lnp.sin(theta) * v
 
         # Assemble result
-        states_dot = self.make_dict(
-            group="states_dot",
-            v=v_dot,
-            x=dx_dt,
-            y=dy_dt,
-        )
+        states_dot = self.make_dict(group="states_dot", v=v_dot, x=dx_dt, y=dy_dt,)
         outputs = self.make_dict(group="outputs", theta=theta)
         return self.make_state_space_model_return(
             states_dot=states_dot, outputs=outputs
@@ -94,9 +87,7 @@ class TimeModelWithCustomDerivatives(TimeModel):
     """The Brachistochrone model formulatd in the time domain, with custom derivatives."""
 
     def __init__(
-        self,
-        model_config: Dict[str, Any] = {},
-        params: Dict[str, Any] = {},
+        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
@@ -240,9 +231,7 @@ class DistanceModel(StateSpaceModel):
     """
 
     def __init__(
-        self,
-        model_config: Dict[str, Any] = {},
-        params: Dict[str, Any] = {},
+        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
@@ -265,10 +254,7 @@ class DistanceModel(StateSpaceModel):
         y_dot = lnp.tan(theta)
         # Assemble result
         states_dot = self.make_dict(
-            group="states_dot",
-            time=time_dot,
-            v=v_dot,
-            y=y_dot,
+            group="states_dot", time=time_dot, v=v_dot, y=y_dot,
         )
 
         return self.make_state_space_model_return(states_dot=states_dot)
@@ -331,10 +317,11 @@ def solve_brachistochrone(
     x0 = np.zeros(ocp.num_dec)
     solution, info = ocp.solve(
         x0,
-        max_iter=200,
-        print_level=1,
+        max_iter=500,
+        print_level=5,
         print_timing_statistics="no",
         derivative_test="none",
+        linear_solver="mumps",
     )
     vars = ocp.dec_var_operator.unflatten_var(solution)
     op = ocp.dec_var_operator
@@ -344,7 +331,7 @@ def solve_brachistochrone(
     logger.info(f"minimum height {min_y:.3f}")
     logger.info(f"final time {final_t:.3f}")
 
-    return final_t
+    return final_t, info
 
 
 def main():
