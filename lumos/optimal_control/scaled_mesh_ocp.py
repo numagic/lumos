@@ -95,6 +95,7 @@ class ScaledMeshOCP(CompositeProblem):
         self.transcription: Transcription = make_transcription(
             *sim_config.transcription
         )
+        self.is_cyclic: bool = sim_config.is_cyclic
         self.is_condensed: bool = sim_config.is_condensed
         self.backend: str = sim_config.backend
 
@@ -652,10 +653,7 @@ class ScaledMeshOCP(CompositeProblem):
             # 2) the user are free to set the scales of the residual in the model.
             condensed_model_algebra_scales = np.concatenate(
                 [continuity_scales]
-                + [
-                    var_scales["con_outputs"],
-                    np.ones(self.model.num_residuals),
-                ]
+                + [var_scales["con_outputs"], np.ones(self.model.num_residuals),]
                 * self.num_stages
             )
             self._constraints["model_algebra"].set_con_scales(
@@ -793,9 +791,7 @@ class ScaledMeshOCP(CompositeProblem):
             # Write the result file
             result_file = os.path.join(self._logging_dir, "results.csv")
             self._create_result_df(
-                self._last_iter_dec_var,
-                file_path=result_file,
-                iter_num=self._num_iter,
+                self._last_iter_dec_var, file_path=result_file, iter_num=self._num_iter,
             )
 
             # Combine the metrics history
@@ -854,13 +850,16 @@ class ScaledMeshOCP(CompositeProblem):
 
     def _create_result_df(self, dec_var: np.ndarray, file_path: str, iter_num: int):
         logger.debug("Creating iteration result dataframe")
-        structured_vars = self.dec_var_operator.unflatten_var(dec_var)
+        unscaled_dec_var = dec_var * self._dec_var_scales
+        structured_vars = self.dec_var_operator.unflatten_var(unscaled_dec_var)
+        # Calling hte model needs unscaled vars
         model_return = self.model.batched_forward(
             structured_vars.states,
             structured_vars.inputs,
-            self._flat_normalized_mesh * self._get_mesh_scale(dec_var),
+            self._flat_normalized_mesh * self._get_mesh_scale(unscaled_dec_var),
             self._params,
         )
+        # Calling the constraints needs scaled vars
         cons = self.constraints(dec_var)
         # split into interval con and stage con (for lifted problem)
         # FIXME: this assumes ordering of constraints, which would break easily
@@ -911,12 +910,11 @@ class ScaledMeshOCP(CompositeProblem):
         interval_cons = np.vstack([np.zeros(interval_con_shape[1]), interval_cons])
         # create interval con df
         interval_cons_df = pd.DataFrame(
-            data=interval_cons,
-            columns=interval_con_columns,
+            data=interval_cons, columns=interval_con_columns,
         )
 
         dec_var_df = pd.DataFrame(
-            data=self.dec_var_operator.get_stage_var_array(dec_var),
+            data=self.dec_var_operator.get_stage_var_array(unscaled_dec_var),
             columns=self.dec_var_operator.stage_var_names,
         )
 
@@ -925,7 +923,22 @@ class ScaledMeshOCP(CompositeProblem):
             columns=["outputs." + n for n in self.model.get_group_names("outputs")],
         )
 
-        df_list = [dec_var_df, outputs_df, interval_cons_df, stage_cons_df]
+        df_list = [
+            dec_var_df,
+            outputs_df,
+            interval_cons_df,
+            stage_cons_df,
+        ]
+
+        # Handle cyclic constraints if the problem is cylic
+        if self.is_cyclic:
+            # Cyclic-con is NOT defined at every point on the mesh, but to log, we need to
+            # make it also num_stages x num_columns. So make only the last stages non-zero
+            cyclic_cons = np.zeros((self.num_stages, len(self._cyclic_vars)))
+            cyclic_cons[-1, :] = cons["cyclic"]
+            cyclic_con_columns = ["cyclic_con." + n for n in self._cyclic_vars]
+            cyclic_cons_df = pd.DataFrame(data=cyclic_cons, columns=cyclic_con_columns)
+            df_list.append(cyclic_cons_df)
 
         # combine dfs
         result_df = pd.concat(df_list, axis=1)
@@ -1100,10 +1113,7 @@ class ScaledMeshOCP(CompositeProblem):
 
         # Then stack and increment along the interval axis
         A_rows = stack_and_increment(
-            A_rows,
-            axis=-1,
-            num_repeat=self.model.num_states,
-            num_increment=1,
+            A_rows, axis=-1, num_repeat=self.model.num_states, num_increment=1,
         )
 
         A_cols = stack_and_increment(
