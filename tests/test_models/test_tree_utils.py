@@ -3,6 +3,7 @@ from typing import Callable
 from unittest import TestCase
 
 import numpy as np
+from casadi import MX
 
 from lumos.models.tree_utils import ParameterTree, ConfigTree
 
@@ -15,6 +16,8 @@ class TestParameterTree(TestCase):
         alpha = np.random.randn(7)
         delta = -0.3
         mux, muy = 0.98, 0.87
+        array_1d = np.random.randn(3)
+        array_2d = np.random.randn(4, 4)
         cls.param_dict = {
             "data": {"mass": mass, "power": power},
             "children": {
@@ -25,7 +28,15 @@ class TestParameterTree(TestCase):
                         "drs": {"data": {"delta": delta}, "children": {}},
                     },
                 },
-                "tire": {"data": {"mux": mux, "muy": muy}, "children": {}},
+                "tire": {
+                    "data": {
+                        "mux": mux,
+                        "muy": muy,
+                        "array_1d": array_1d,
+                        "array_2d": array_2d,
+                    },
+                    "children": {},
+                },
             },
         }
 
@@ -38,6 +49,8 @@ class TestParameterTree(TestCase):
             "aero.drs.delta": delta,
             "tire.mux": mux,
             "tire.muy": muy,
+            "tire.array_1d": array_1d,
+            "tire.array_2d": array_2d,
         }
 
     def test_from_dict(self):
@@ -79,6 +92,30 @@ class TestParameterTree(TestCase):
         children, aux = pt.tree_flatten()
         reconstructed = ParameterTree.tree_unflatten(aux, children)
         np.testing.assert_equal(reconstructed.to_dict(), pt.to_dict())
+
+    def test_unravel_casadi_params_based_on_numpy_tree(self):
+        """See models.base.StateSpaceModel._make_casadi_model_algebra_cons
+        
+        Models come with default parameters defined in numpy. To create the equivalent
+        parameter tree in casadi, we currently:
+        1) ravel the numpy TreeParam, get an unravel function, and flat numpy params
+        2) create a casadi flat params, using the size of the numpy params
+        3) unravel the casadi flat params to create a casadi Tree Params
+
+        Since casadi only has 2d array types (1d arrays are made into column 2d arrays)
+        the shapes would need some special treatment
+
+        This test is added after we ran into bugs where if parameters contain 1d arrays,
+        it won't work.
+        """
+        params = ParameterTree.from_dict(self.param_dict)
+        flat_params, unravel = params.tree_ravel()
+
+        cas_flat_params = MX.sym("params", len(flat_params))
+
+        # We main just check that the unravel from a numpy TreeParam still works on
+        # casadi flat params.
+        cas_dict_params = unravel(cas_flat_params)
 
     def test_tree_ravel(self):
         pt = ParameterTree.from_dict(self.param_dict)

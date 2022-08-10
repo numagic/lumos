@@ -291,11 +291,25 @@ def _ravel_flat_dict(flat_tree):
 
     def unravel(arr):
         chunks = _split(arr, indices[:-1])
+        if _is_casadi_instance(arr):
+            # For casadi backend, we need to create casadi flat and TreeParams form
+            # numpy TreeParams. As such as we need the unravel able to handle casadi
+            # varialbs when casadi represents 1d arrays as 2d column arrays.
+            # See models.base.StateSpaceModel._make_casadi_model_algebra_cons
+            new_shapes = []
+            for shape in shapes:
+                if len(shape) == 1:
+                    # Make it a 2d shape of column vector for casadi
+                    shape = (shape[0], 1)
+                new_shapes.append(shape)
+
+        else:
+            new_shapes = shapes
+
         reconstructed_values = [
             chunk.reshape(shape) if _size(chunk) > 1 else chunk[0]
-            for chunk, shape in zip(chunks, shapes)
+            for chunk, shape in zip(chunks, new_shapes)
         ]
-
         return dict(zip(keys, reconstructed_values))
 
     raveled = _concat([_ravel(e) for e in values])
