@@ -1274,6 +1274,8 @@ class ScaledMeshOCP(CompositeProblem):
         lumos.optimal_control.nlp.BaseObjective for more details.
         - when multiple objectives are added, then the final objecitve funtion is the
         sum of all the objectives provided.
+        - the user does NOT have to scale the inputs for the objectives yet, the OCP
+        will do that to all objecitves simultaneously. 
         """
         # Common objective regardless of the problem
         time_objective = BaseObjective(
