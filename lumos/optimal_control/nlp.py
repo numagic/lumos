@@ -692,8 +692,17 @@ class CompositeProblem(NLPFunction):
         self._constraints.pop(name)
 
     def add_objective(self, name: str, o: BaseObjective):
+        """Add an objecitve function to the problem.
+
+        Args:
+            name (str): name of the objective
+            o (BaseObjective): the objective to use
+
+        Raises:
+            NameError: if the name of the objective already exists.
+        """
         if name in self._objectives:
-            raise ValueError(
+            raise NameError(
                 f"{name} already exists in defined objectives. Please change to a new name.",
                 f"Currently used names are {self._objectives.keys()}",
             )
