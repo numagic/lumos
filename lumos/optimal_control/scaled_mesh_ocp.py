@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import glob
 import logging
 import os
@@ -1262,6 +1263,18 @@ class ScaledMeshOCP(CompositeProblem):
         self.add_constraints("cyclic", cyclic_con)
 
     def _build_objective(self):
+        """Builds the objecitve functions for the OCP.
+
+        NOTE:
+        - by default, this builds a total time objective (which also serves as an
+        example).
+        - if the user wants custom objective, then this method must be overwritten by a
+        child class: see lumos.simulations.laptime_simulation._build_objective
+        - for how to construct an objective object, see:
+        lumos.optimal_control.nlp.BaseObjective for more details.
+        - when multiple objectives are added, then the final objecitve funtion is the
+        sum of all the objectives provided.
+        """
         # Common objective regardless of the problem
         time_objective = BaseObjective(
             num_in=self.num_dec,
