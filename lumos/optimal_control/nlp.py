@@ -331,20 +331,51 @@ class BaseObjective:
         hessian: Callable,
         hessian_structure: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     ):
+        """Create an objective object that can be used by OCP.
+
+        Args:
+            num_in (int): number of inputs, or decision variables
+
+            objective (Callable): an unscaled function f(x) that takes in the input x
+            and returns a scalar objective value.
+
+            gradient (Callable): an unscaled function g(x) that takes in the input x and
+            returns an array that is the same size as x.
+
+            hessian (Callable): an unscaled function h(x) that returns a 1d array of the
+            non-zero elements in the hessian, that has the same length as the indicdes
+            in hessian_structrue.
+
+            hessian_structure (Optional[Tuple[np.ndarray, np.ndarray]], optional): a
+            tuple of 2 equal-size arrays of (rows, cols) that gives the row and column
+            indices of the non-sparse elements. If not given, then it is assumed the
+            hessian is fully dense.
+        """
+
         self.num_in = num_in
         self._objective = objective
         self._gradient = gradient
         self._hessian = hessian
         if hessian_structure is None:
             self._hessian_structure = np.nonzero(np.ones((num_in, num_in)))
+            self._sparse_hess = False
         else:
             self._hessian_structure = hessian_structure
+            self._sparse_hess = True
 
         # Set the default scales
         self._input_scales = np.ones(self.num_in)
         self.update_hess_scales()
 
     def set_input_scales(self, scales: np.ndarray):
+        """Set the input scale to be used for the objective.
+
+        Args:
+            scales (np.ndarray): an array that is the same size as the decision variable
+            and maps the scaled varialbes x_hat to the unscaled ones:
+            x = scale * x_hat
+        """
+
         self._input_scales = scales
         self.update_hess_scales()
 
@@ -352,17 +383,52 @@ class BaseObjective:
         rows, cols = self.hessianstructure()
         self._hess_scales = 1 / (self._input_scales[rows] * self._input_scales[cols])
 
-    def objective(self, x):
+    def objective(self, x: np.ndarray) -> float:
+        """Call the objective function with a scaled inputs
+
+        Args:
+            x (np.ndarray): scaled inputs
+
+        Returns:
+            float: the objective value
+        """
         return self._objective(x * self._input_scales)
 
-    def gradient(self, x):
+    def gradient(self, x: np.ndarray) -> np.ndarray:
+        """Call the gradient with scaled inputs
+
+        Args:
+            x (np.ndarray): scaled inputs
+
+        Returns:
+            np.ndarray: the gradient of the objective w.r.t. the scaled inputs.
+        """
         return self._gradient(x * self._input_scales) * self._input_scales
 
-    def hessianstructure(self):
+    def hessianstructure(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Return the sparsity structure of the hessian
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: a tuple of 2 equal-size arrays of
+            (rows, cols) that gives the row and column indices of the non-sparse
+            elements.
+        """
         return self._hessian_structure
 
-    def hessian(self, x):
-        return self._hessian(x * self._input_scales) / self._hess_scales
+    def hessian(self, x: np.ndarray) -> np.ndarray:
+        """Call the hessian with scaled inputs.
+
+        Args:
+            x (np.ndarray): scaled inputs.
+
+        Returns:
+            np.ndarray: the non-sparse elements of the hessian as an array. Must be the
+            same size as the indicer from hessianstructure.
+        """
+        if self._sparse_hess:
+            return self._hessian(x * self._input_scales) / self._hess_scales
+        else:
+            return self._hessian(x * self._input_scales) / self._hess_scales
 
 
 class NLPFunction(ABC):
@@ -631,8 +697,17 @@ class CompositeProblem(NLPFunction):
         self._constraints.pop(name)
 
     def add_objective(self, name: str, o: BaseObjective):
+        """Add an objecitve function to the problem.
+
+        Args:
+            name (str): name of the objective
+            o (BaseObjective): the objective to use
+
+        Raises:
+            NameError: if the name of the objective already exists.
+        """
         if name in self._objectives:
-            raise ValueError(
+            raise NameError(
                 f"{name} already exists in defined objectives. Please change to a new name.",
                 f"Currently used names are {self._objectives.keys()}",
             )
