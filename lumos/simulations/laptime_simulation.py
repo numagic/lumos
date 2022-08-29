@@ -92,12 +92,12 @@ def get_default_scales() -> Tuple[ScaleConfig]:
 
 def get_default_con_output_names() -> Tuple[str]:
     return (
-        "vehicle.slip_angle_fr",
         "vehicle.slip_ratio_fl",
         "vehicle.slip_ratio_fr",
         "vehicle.slip_ratio_rl",
         "vehicle.slip_ratio_rr",
         "vehicle.slip_angle_fl",
+        "vehicle.slip_angle_fr",
         "vehicle.slip_angle_rl",
         "vehicle.slip_angle_rr",
     )
@@ -152,10 +152,7 @@ class LaptimeSimulation(FixedMeshOCP):
         # would have been initialized with the wrong total mesh_scale if we didn't pass
         # it in during construction time!
         # This seems very dangerous
-        model = SimpleVehicleOnTrack(
-            params=model_params,
-            model_config=model_config,
-        )
+        model = SimpleVehicleOnTrack(params=model_params, model_config=model_config,)
 
         # Set a dummy meshscale first, and update it later when we set the track.
         # Unfortunately setting track must happen AFTER problem construction because we
@@ -241,7 +238,7 @@ class LaptimeSimulation(FixedMeshOCP):
         weight_matrix = self._expand_weights(weights)
 
         structured_vars = self.dec_var_operator.unflatten_var(x)
-        return (structured_vars.inputs**2 * weight_matrix).sum() / self.num_stages
+        return (structured_vars.inputs ** 2 * weight_matrix).sum() / self.num_stages
 
     def _inputs_penalty_grad(self, x, weights: Dict[str, float] = {"steer": 1.0}):
         weight_matrix = self._expand_weights(weights)
