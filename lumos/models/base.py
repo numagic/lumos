@@ -11,9 +11,13 @@ import numpy as np
 from jax import jit, vmap
 
 import lumos.numpy as lnp
-from lumos.optimal_control.nlp import MappedConstraints, JaxConstraints, CasConstraints
-from lumos.models.composition import CompositeModel
-from lumos.optimal_control.nlp import CasConstraints, JaxConstraints
+from lumos.optimal_control.nlp import (
+    MappedConstraints,
+    JaxMappedConstraints,
+    CasMappedConstraints,
+)
+from lumos.models.composition import CompositeModel, ParameterTree
+from lumos.optimal_control.nlp import CasMappedConstraints, JaxMappedConstraints
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +42,7 @@ StateSpaceIO = namedtuple(
 
 
 def model_io(
-    inputs: Tuple[str] = (),
-    outputs: Tuple[str] = (),
-    residuals: Tuple[str] = (),
+    inputs: Tuple[str] = (), outputs: Tuple[str] = (), residuals: Tuple[str] = (),
 ):
     """Decorator to set the input and output names of a stateless model."""
 
@@ -123,9 +125,7 @@ class Model(CompositeModel):
     """Abstract class for mathematical models of the simplest form."""
 
     def __init__(
-        self,
-        model_config: Dict[str, Any] = {},
-        params: Dict[str, Any] = {},
+        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
@@ -406,9 +406,7 @@ class StateSpaceModel(Model):
     _implicit_inputs: Tuple[str]
 
     def __init__(
-        self,
-        params: Dict[str, Any] = {},
-        model_config: Dict[str, Any] = {},
+        self, params: Dict[str, Any] = {}, model_config: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
         self._check_names()
@@ -562,10 +560,7 @@ class StateSpaceModel(Model):
         return dict(zip(self._implicit_inputs, list_vars))
 
     def _apply_and_flat_implicit(
-        self,
-        flat_vars: lnp.ndarray,
-        mesh: float,
-        params,
+        self, flat_vars: lnp.ndarray, mesh: float, params,
     ) -> lnp.ndarray:
         self.set_recursive_params(params)
         dict_vars = self._split_flat_vars(flat_vars)
@@ -610,17 +605,31 @@ class StateSpaceModel(Model):
 
         FIXME: currently we also require this function to formulate the _batched_forward
         function, which we should probaly consider moving somewhere else.
+
+        FIXME: here we direclty return the MappedConstraints (either Cas or Jax), but
+        there should be one step in between where we get a single stage model algebra
         """
+
+        # store the original parameters (and also must make a copy)
+        # TODO: create a param copy method
+        params = ParameterTree.from_dict(self.get_recursive_params().to_dict())
+
         if backend == "casadi":
-            self._make_casadi_model_algebra_cons()
+            implicit_functions = self._make_casadi_model_algebra_cons()
         elif backend == "jax":
-            self._make_jax_model_algebra_cons()
+            implicit_functions = self._make_jax_model_algebra_cons()
         elif backend == "custom":
-            self._make_custom_model_algebra_cons()
+            implicit_functions = self._make_custom_model_algebra_cons()
         else:
             raise ValueError(
                 f"{backend} is not supported. Only 'jax', 'casadi' and 'custom' backends are supported."
             )
+
+        # Restore the original params (some backends would replace model params with
+        # objects such as their own symbolic types or tracers during tracing)
+        self.set_recursive_params(params)
+
+        return implicit_functions
 
     def _model_algebra_jacobianstructure(self):
         """A pessimistic estimate for the jacobian structure of model algebra.
@@ -695,13 +704,13 @@ class StateSpaceModel(Model):
 
     def _make_jax_model_algebra_cons(self):
         # For jax, we rely on jac and hessian to compute the constraints at a later
-        # stage. See JaxConstraints
+        # stage. See JaxMappedConstraints
         implicit_functions = {
             "constraints": self._apply_and_flat_implicit,
         }
 
         # TODO: _stage_hessianstructure not yet implemented
-        self.model_algebra = JaxConstraints(
+        self.model_algebra = JaxMappedConstraints(
             num_in=self.num_implicit_var,
             num_con=self.num_implicit_res,
             **implicit_functions,
@@ -713,6 +722,9 @@ class StateSpaceModel(Model):
         self._batched_forward = lnp.use_backend("jax")(
             jit(vmap(self.apply_and_forward_with_arrays, in_axes=[0, 0, 0, None]))
         )
+
+        # FIXME: here the implicit functions are incomplete
+        return implicit_functions
 
     def _make_custom_model_algebra_cons(self):
         implicit_functions = {
@@ -735,6 +747,8 @@ class StateSpaceModel(Model):
             return StateSpaceModelReturn(*out)
 
         self._batched_forward = custom_batched_forward
+
+        return implicit_functions
 
     def _make_casadi_model_algebra_cons(self, CasType: type = cas.MX):
         # NOTE: for large linear operations, like those in FC layers, MX is much faster
@@ -782,7 +796,7 @@ class StateSpaceModel(Model):
         codegen.add(
             cas.Function(
                 "implicit_hess",
-                [stage_vars, mesh, cas_flat_params, mult],
+                [stage_vars, mult, mesh, cas_flat_params],
                 [lagrange_hessian],
             )
         )
@@ -837,11 +851,12 @@ class StateSpaceModel(Model):
             "hessian_structure": (np.array(hess_rows), np.array(hess_cols)),
         }
 
-        self.model_algebra = CasConstraints(
+        self.model_algebra = CasMappedConstraints(
             num_in=self.num_implicit_var,
             num_con=self.num_implicit_res,
             **implicit_functions,
         )
+        return implicit_functions
 
     def export_c_code(
         self,

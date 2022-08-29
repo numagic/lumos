@@ -184,9 +184,7 @@ class DecVarOperator:
 
     def _construct_global_var_enum(self):
         self._global_var_enum = IntEnum(
-            "GlobalVarEnum",
-            self._global_var_names,
-            start=self.num_all_stage_var,
+            "GlobalVarEnum", self._global_var_names, start=self.num_all_stage_var,
         )
 
     def get_var_index_in_group(self, group: str, name: str) -> int:

@@ -41,9 +41,9 @@ def _make_lagrangian(constraints: Callable) -> Callable:
         """
 
         # Split the arguments
-        # FIXME: hard-coded order for lagrangian to be the last input!
-        *args_to_func, lagrange = args
-        return jnp.dot(lagrange, constraints(*args_to_func))
+        # FIXME: hard-coded order for lagrangian!
+        x, lagrange, *args_to_func = args
+        return jnp.dot(lagrange, constraints(x, *args_to_func))
 
     return _lagrangian
 
@@ -104,18 +104,25 @@ class BaseConstraints:
         self.update_jac_scales()
         self.update_hess_scales()
 
-    def constraints(self, x):
-        return self._constraints(x * self._input_scales) / self._con_scales
+    def constraints(self, x, *args, **kwargs):
+        return (
+            self._constraints(x * self._input_scales, *args, **kwargs)
+            / self._con_scales
+        )
 
-    def jacobian(self, x):
-        return self._jacobian(x * self._input_scales) / self._jac_scales
+    def jacobian(self, x, *args, **kwargs):
+        return (
+            self._jacobian(x * self._input_scales, *args, **kwargs) / self._jac_scales
+        )
 
-    def hessian(self, x, lagrange):
+    def hessian(self, x, lagrange, *args, **kwargs):
         # Scaling the contribution of the constraints to the hessian is equivalent to
         # scaling the lagrangian multipliers corresponding to the constraints
 
         return (
-            self._hessian(x * self._input_scales, lagrange / self._con_scales)
+            self._hessian(
+                x * self._input_scales, lagrange / self._con_scales, *args, **kwargs
+            )
             / self._hess_scales
         )
 
@@ -184,7 +191,7 @@ class MappedConstraints(BaseConstraints):
     map_args: Dict[str, Dict[str, Any]] = {
         "constraints": {"in_axes": [0, 0, None]},
         "jacobian": {"in_axes": [0, 0, None]},
-        "hessian": {"in_axes": [0, 0, None, 0]},
+        "hessian": {"in_axes": [0, 0, 0, None]},
     }
 
     def __init__(
@@ -225,7 +232,7 @@ class MappedConstraints(BaseConstraints):
         self.mapped_hessian = self.map_func(self._hessian, **self.map_args["hessian"])
 
 
-class JaxConstraints(MappedConstraints):
+class JaxMappedConstraints(MappedConstraints):
     map_func: Callable = staticmethod(jax.vmap)
 
     def __init__(
@@ -274,12 +281,12 @@ class JaxConstraints(MappedConstraints):
         self.mapped_hessian = lnp.use_backend("jax")(jax.jit(self.mapped_hessian))
 
 
-class CasConstraints(MappedConstraints):
+class CasMappedConstraints(MappedConstraints):
     map_func: Callable = staticmethod(cmap)
     map_args: Dict[str, Dict[str, Any]] = {
         "constraints": {"in_axes": [0, 0, None], "sparse": False, "num_workers": 32},
         "jacobian": {"in_axes": [0, 0, None], "sparse": True, "num_workers": 32},
-        "hessian": {"in_axes": [0, 0, None, 0], "sparse": True, "num_workers": 32},
+        "hessian": {"in_axes": [0, 0, 0, None], "sparse": True, "num_workers": 32},
     }
 
 
@@ -434,7 +441,7 @@ class BaseObjective:
 class NLPFunction(ABC):
     """Base class for nonlinear programming problem for IPOPT"""
 
-    _hessian_approximation: str = "limited-memory"  # "limited-memory" or "exact"
+    hessian_approximation: str = "limited-memory"  # "limited-memory" or "exact"
 
     # number of iterations used
     _num_iter: int = None
@@ -659,7 +666,7 @@ class CompositeProblem(NLPFunction):
 
     def __init__(self, num_in: int):
 
-        self.num_in = num_in
+        self.num_dec = num_in
 
         # NOTE: These must be instance properties. If they are class properties, then
         # the CompositeProblem would behave like a singleton, so if you instantiate one
@@ -669,6 +676,11 @@ class CompositeProblem(NLPFunction):
         self._idx_triu: np.ndarray = (
             None  # index of upper triangular entries in the hessian.
         )
+
+        # Set default varaible bounds and constraint bounds
+        self.set_default_bounds()
+
+        self.set_default_scales()
 
     @property
     def num_con(self):
@@ -684,9 +696,9 @@ class CompositeProblem(NLPFunction):
                 f"name. Currently used names are {self._constraints.keys()}",
             )
 
-        if not (c.num_in == self.num_in):
+        if not (c.num_in == self.num_dec):
             raise ValueError(
-                f"Mismatch number of inputs: expected {self.num_in} but "
+                f"Mismatch number of inputs: expected {self.num_dec} but "
                 f" got a constraints {name} with {c.num_in}"
             )
 
@@ -712,6 +724,9 @@ class CompositeProblem(NLPFunction):
                 f"Currently used names are {self._objectives.keys()}",
             )
         self._objectives.update({name: o})
+
+    def delete_objective(self, name: str):
+        self._objectives.pop(name)
 
     def _compute_objective(self, x):
         return np.sum(np.hstack([p.objective(x) for p in self._objectives.values()]))
@@ -836,3 +851,17 @@ class CompositeProblem(NLPFunction):
             )
 
         return results
+
+    def set_default_bounds(self):
+        """Set default bounds of decision variables without external configs.
+
+        For the base class, the default is set to be unbounded.
+        """
+
+        # Create default (-inf, inf) bounds
+        self.lb = -np.inf * np.ones(self.num_dec)
+        self.ub = np.inf * np.ones(self.num_dec)
+
+    def set_default_scales(self):
+        # Default scales is unscaled
+        self._dec_var_scales = np.ones(self.num_dec)

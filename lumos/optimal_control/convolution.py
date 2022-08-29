@@ -2,12 +2,13 @@ from typing import Any, Callable, Dict
 
 import numpy as np
 
-from lumos.optimal_control.nlp import MappedConstraints, CasConstraints
+from lumos.optimal_control.nlp import MappedConstraints, CasMappedConstraints
 from lumos.optimal_control.utils import (
     DecVarOperator,
     batch_conv1d,
     create_offset_structure,
 )
+from lumos.models.tree_utils import ParameterTree
 
 
 class ConvConstraints(MappedConstraints):
@@ -82,7 +83,7 @@ class ConvConstraints(MappedConstraints):
             lagrange = np.reshape(lagrange, shape)
 
             hess = unit_problem.mapped_hessian(
-                transformed_vars, self._get_mesh(x), self._params, lagrange
+                transformed_vars, lagrange, self._get_mesh(x), self._params
             )
 
             return np.ravel(hess)
@@ -101,11 +102,11 @@ class ConvConstraints(MappedConstraints):
 
     def set_params(self, params):
         # Casadi functions requires flat array as inputs.
-        # TODO: perhaps we should move this into another wrapper on CasConstraints and
+        # TODO: perhaps we should move this into another wrapper on CasMappedConstraints and
         # leave ConvConstraints backend-agnostic. The advantage of doing it like now is
-        # to 1) use minimum code in CasConstraints and 2) only run this parameter
+        # to 1) use minimum code in CasMappedConstraints and 2) only run this parameter
         # flattening once, instead of everytime a function is called.
-        if isinstance(self._unit_problem, CasConstraints):
+        if isinstance(self._unit_problem, CasMappedConstraints):
             self._params, _ = params.tree_ravel()
         else:
             self._params = params

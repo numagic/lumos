@@ -101,6 +101,9 @@ class ScaledMeshOCP(CompositeProblem):
         self.backend: str = sim_config.backend
 
         # Set the groups of variables to be used in the implicit call of the model.
+        # TODO: perhaps it makes more sense for this part to be taken care of by the
+        # model itself, because the model itself constructs the model algebra
+        # constraints, which means it needs to know its implicit inputs anyway.
         self.model.set_flat_implicit_inputs(self.stage_var_groups)
 
         # Tell the model what outputs to use as constraint outputs.
@@ -132,7 +135,7 @@ class ScaledMeshOCP(CompositeProblem):
 
         # NOTE: here it is mega dangerous that if we keep appending ConvProlbme to the
         # composite problem, then it could be
-        super().__init__(num_in=self.num_dec)
+        super().__init__(num_in=self.dec_var_operator.num_dec)
         self._build_objective()
 
         self._build_model_algebra()
@@ -149,8 +152,6 @@ class ScaledMeshOCP(CompositeProblem):
                 for n in self.model.get_group_names("states_dot")
             )
 
-        # Set default varaible bounds and constraint bounds
-        self.set_default_bounds()
         self.update_bounds(sim_config.bounds)
 
         # Set specific boundary conditions of variables at certain stages
@@ -530,10 +531,6 @@ class ScaledMeshOCP(CompositeProblem):
         return self.dec_var_operator.num_stages
 
     @property
-    def num_dec(self):
-        return self.dec_var_operator.num_dec
-
-    @property
     def num_continuity_cons(self):
         return (
             self.model.num_states
@@ -564,16 +561,6 @@ class ScaledMeshOCP(CompositeProblem):
         keep = keep_rows & keep_cols
 
         return rows[keep], cols[keep]
-
-    def set_default_bounds(self):
-        """Set default bounds of decision variables without external configs.
-
-        For the base class, the default is set to be unbounded.
-        """
-
-        # Create default (-inf, inf) bounds
-        self.lb = -np.inf * np.ones(self.num_dec)
-        self.ub = np.inf * np.ones(self.num_dec)
 
     def update_bounds(self, bounds: Tuple[BoundConfig]):
         """Update variable bounds using bound configs.
