@@ -59,7 +59,7 @@ class ModelSolver(CompositeProblem):
         # TODO: model algebra scales, maybe this should be unified with
         # scaled_mesh_ocp.set_scales, and move to higher level?
         # TODO: currently hard-coded all scales to 1
-        model.model_algebra.set_con_scales(np.ones(model.num_implicit_res))
+        # model.model_algebra.set_con_scales(np.ones(model.num_implicit_res))
 
         # FIXME: need to wrap model_algebra to remove mesh and params
         # FIXME: we create CasMappedConstraints (839 in base.py), but it actually is NOT
@@ -101,6 +101,9 @@ class ModelSolver(CompositeProblem):
 
         # Set all constarint values (here all to 0, for equality, or 0 residual)
         self.set_cons()
+
+        # Set default scales of the variables
+        self._set_default_var_scales()
 
     def _construct_name(self, group, name):
         return group + "." + name
@@ -147,6 +150,87 @@ class ModelSolver(CompositeProblem):
 
         return self.lb[idx], self.ub[idx]
 
+    def _set_default_var_scales(self):
+        """Create the default scale storage.
+        
+        This should also trigger the corresponding updates of the input and output
+        scales in the constraints.
+        """
+
+        self._var_scales = {
+            g: {n: 1.0 for n in getattr(self._model.names, g)}
+            for g in self._input_groups
+        }
+
+        self._update_problem_scales()
+
+    def _update_problem_scales(self):
+        # TODO: construct the actual constraint scales
+
+        # HACK: hard-coded order here needs to correspond to order of model_algebra.
+        # scaled_mesh_ocp.py has exactly the same issue
+        states_dot_scales = np.array(
+            [self._var_scales["states"][n] for n in self._model.names.states]
+        )
+        con_output_scales = np.array(
+            [self._var_scales["con_outputs"][n] for n in self._model.names.con_outputs]
+        )
+
+        # For residuals, the user can set them in the model when forming the residuals
+        # as they are supposed to be 0 anyway.
+        residual_scales = np.ones(self._model.num_residuals)
+
+        model_algebra_scales = np.concatenate(
+            [states_dot_scales, con_output_scales, residual_scales]
+        )
+
+        self._constraints["model_algebra"].set_con_scales(model_algebra_scales)
+
+        # TODO: update objective function scale?
+
+        # TODO: udpate decision variable scale
+        # TODO: this could need some tidy-up, across the NLP classes
+        for g in self._input_groups:
+            for n in getattr(self._model.names, g):
+                self._dec_var_scales[
+                    self._model.get_var_index_in_flat(g, n)
+                ] = self._var_scales[g][n]
+
+        for _, c in self._constraints.items():
+            c.set_input_scales(self._dec_var_scales)
+
+    def set_var_scale(self, group, name, val):
+        """Set the scale for one variable
+        
+        These variable scales are then used to construct the scales of the constraints
+        and decision variables
+
+        Groups that can have their scales set are: states, inputs and con_outputs.
+        """
+        assert val > 0, "scale must be positive!"
+        _allowed_groups = ["states", "inputs", "con_outputs"]
+        if group not in _allowed_groups:
+            raise KeyError(
+                f"{group} is not a valid group. Allowed groups are {_allowed_groups}"
+            )
+
+        if name not in self._var_scales[group]:
+            raise KeyError(
+                f"{name} is not a valid variable in the group {group}, valid names are: {list(self._var_scales[group].keys())}"
+            )
+
+        # We need to update the following:
+        # 1) input scales to the objective and constraints
+        # 2) output scales of the constraints
+        # 3) decision variable scales (Is this a duplicate? if we scale overall dec var
+        # then we don't have to scale each individual constraints, and we can just leave
+        # them as unscaled?) -> in scaled_mesh_ocp, we don't do overall problem scaling
+        # but just pass the scaling to sub problems, which probably makes sense
+
+        self._var_scales[group][name] = val
+
+        self._update_problem_scales()
+
     def get_var(self, x, group, name):
         idx = self.get_var_idx(group, name)
         return x[idx]
@@ -161,11 +245,7 @@ class TestModelSolver(unittest.TestCase):
     def setUp(self) -> None:
         self.model = ModelMaker.make_model_from_name("SimpleVehicle")
 
-    def test_solve_coasting(self):
-        # Create the problem, only needs a model, bounds, and configs
-
-        # Maybe also need custom objective and constraints?
-        ms = ModelSolver(
+        self.ms = ModelSolver(
             model=self.model,
             backend="casadi",
             con_outputs=[
@@ -183,6 +263,33 @@ class TestModelSolver(unittest.TestCase):
                 "slip_angle_rr",
             ],
         )
+
+    def test_set_scales(self):
+
+        # Check if the default scales are all correct (unscaled)
+        ms = self.ms
+        for g in ms._input_groups:
+            for n in getattr(self.model.names, g):
+                self.assertAlmostEqual(ms._var_scales[g][n], 1.0)
+
+        # Set a scale that doesn't exist
+        with self.assertRaises(KeyError):
+            ms.set_var_scale("WrongGroup", "vx", 1.0)
+
+        with self.assertRaises(KeyError):
+            ms.set_var_scale("states", "WrongName", 1.0)
+
+        # Set some correct scales
+        ms.set_var_scale("states", "vx", 10.0)
+        self.assertAlmostEqual(ms._var_scales["states"]["vx"], 10.0)
+
+        pass
+
+    def test_solve_coasting(self):
+        # Create the problem, only needs a model, bounds, and configs
+
+        # Maybe also need custom objective and constraints?
+        ms = self.ms
 
         # Add a dummy object
         def _make_obj(group, name, direction):
@@ -250,7 +357,16 @@ class TestModelSolver(unittest.TestCase):
         for name in qs_states:
             ms.set_bounds("states_dot", name, 0.0)
 
-        # Set some bounds
+        # set some scales
+        ms.set_var_scale("states", "wheel_speed_fl", 10)
+        ms.set_var_scale("states", "wheel_speed_fr", 10)
+        ms.set_var_scale("states", "wheel_speed_rl", 10)
+        ms.set_var_scale("states", "wheel_speed_rr", 10)
+        ms.set_var_scale("states", "vx", 10)
+        ms.set_var_scale("con_outputs", "Fz_tire_fl", 100)
+        ms.set_var_scale("con_outputs", "Fz_tire_fr", 100)
+        ms.set_var_scale("con_outputs", "Fz_tire_rl", 100)
+        ms.set_var_scale("con_outputs", "Fz_tire_rr", 100)
 
         x0 = np.ones(ms.num_dec)
         sol, info = ms.solve(x0)
