@@ -9,11 +9,22 @@ from lumos.optimal_control.nlp import BaseConstraints, BaseObjective, CompositeP
 
 
 class ModelSolver(CompositeProblem):
-    def __init__(self, model: Model, backend: str, con_outputs: List[str] = []):
-        """ModelSolver solves algebraic constraints on models.
-        
+    def __init__(self, model: Model, backend: str, con_outputs: List[str] = None):
+        """Formulates and solves for model algebraic constraints.
+
+        Args:
+            model (Model): the statespace model to solve on.
+            backend (str): name of the backend, currently only 'casadi' supported.
+            con_outputs (List[str], optional): names of the outputs that we want to add
+            to the problem as constraint outputs that we could constrain. Defaults to None.
+
         TODO: currently only works on StateSpaceModel, but we should make it work
         on any standard models.
+        TODO: currently only works with casadi backend, but we should make it work with
+        other backends as well.
+
+        See tests.test_optimal_control.test_model_solver::TestModelSolver::test_add_obj_from_var
+        for more details on the use-case.
         """
 
         assert (
@@ -24,6 +35,8 @@ class ModelSolver(CompositeProblem):
         # TODO: now we have two places using constraint outputs, so maybe this should be
         # a model property?
         # TODO: this is also used in scaled_mesh_ocp
+        if con_outputs is None:
+            con_outputs = []
         model.names = model.names._replace(con_outputs=con_outputs)
 
         # TODO: can/should we get away with not storing the model?
@@ -101,6 +114,14 @@ class ModelSolver(CompositeProblem):
     def set_bounds(
         self, group: str, name: str, bounds: Union[float, Tuple[float, float]]
     ):
+        """Set bound on decision variables for the solve.
+
+        Args:
+            group (str): name of the group the variable belongs to.
+            name (str): name of the variable itself
+            bounds (Union[float, Tuple[float, float]]): the bounds to constraint to. If
+            a float is provided, we have a tight equality bound.
+        """
         idx = self.get_var_idx(group, name)
 
         if isinstance(bounds, tuple):
