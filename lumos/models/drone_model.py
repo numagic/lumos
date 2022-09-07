@@ -1,5 +1,4 @@
 import logging
-from re import X
 
 from typing import Any, Dict
 
@@ -13,13 +12,10 @@ logger = logging.getLogger(__name__)
     states=("x", "x_dot", "z", "z_dot", "theta"),
     inputs=("f", "omega"),
     outputs=("sin_theta", "f_omega"),
-    con_outputs=("sin_theta",),
 )
 class DroneModel(StateSpaceModel):
     def __init__(
-        self,
-        model_config: Dict[str, Any] = {},
-        params: Dict[str, Any] = {},
+        self, model_config: Dict[str, Any] = {}, params: Dict[str, Any] = {},
     ):
         super().__init__(model_config=model_config, params=params)
 
@@ -45,14 +41,11 @@ class DroneModel(StateSpaceModel):
         )
 
         outputs = self.make_dict(
-            "outputs",
-            sin_theta=lnp.sin(theta),
-            f_omega=inputs["omega"] * inputs["f"],
+            "outputs", sin_theta=lnp.sin(theta), f_omega=inputs["omega"] * inputs["f"],
         )
 
         return self.make_state_space_model_return(
-            states_dot=states_dot,
-            outputs=outputs,
+            states_dot=states_dot, outputs=outputs,
         )
 
     @classmethod

@@ -3,7 +3,8 @@ from typing import List
 
 import numpy as np
 
-from lumos.models.composition import ModelMaker
+from lumos.models import ModelMaker
+from lumos.models.drone_model import DroneModel
 from lumos.optimal_control.nlp import BaseObjective
 from lumos.optimal_control.model_solver import ModelSolver
 
@@ -53,6 +54,40 @@ def _set_base_vehicle_bounds(ms, qs_states: List[str]):
 
 
 class TestModelSolver(unittest.TestCase):
+    """Test basic functionality of ModelSolver on drone model"""
+
+    def setUp(self) -> None:
+        self.model = DroneModel()
+
+        self.ms = ModelSolver(
+            model=self.model, backend="casadi", con_outputs=["f_omega"],
+        )
+
+    def test_set_scales(self):
+
+        # Check if the default scales are all correct (unscaled)
+        ms = self.ms
+        for g in ms._model.implicit_inputs:
+            for n in getattr(self.model.names, g):
+                self.assertAlmostEqual(ms._var_scales[g][n], 1.0)
+
+        # Set a scale that doesn't exist
+        with self.assertRaises(KeyError):
+            ms.set_var_scale("WrongGroup", "x", 1.0)
+
+        with self.assertRaises(KeyError):
+            ms.set_var_scale("states", "WrongName", 1.0)
+
+        # Set some correct scales
+        ms.set_var_scale("states", "x", 10.0)
+        self.assertAlmostEqual(ms._var_scales["states"]["x"], 10.0)
+
+        pass
+
+
+class TestSolveVehicleModel(unittest.TestCase):
+    """Test advanced solve use-cases on vehicle model."""
+
     def setUp(self) -> None:
         self.model = ModelMaker.make_model_from_name("SimpleVehicle")
 
@@ -74,27 +109,6 @@ class TestModelSolver(unittest.TestCase):
                 "slip_angle_rr",
             ],
         )
-
-    def test_set_scales(self):
-
-        # Check if the default scales are all correct (unscaled)
-        ms = self.ms
-        for g in ms._model.implicit_inputs:
-            for n in getattr(self.model.names, g):
-                self.assertAlmostEqual(ms._var_scales[g][n], 1.0)
-
-        # Set a scale that doesn't exist
-        with self.assertRaises(KeyError):
-            ms.set_var_scale("WrongGroup", "vx", 1.0)
-
-        with self.assertRaises(KeyError):
-            ms.set_var_scale("states", "WrongName", 1.0)
-
-        # Set some correct scales
-        ms.set_var_scale("states", "vx", 10.0)
-        self.assertAlmostEqual(ms._var_scales["states"]["vx"], 10.0)
-
-        pass
 
     def test_feasibility_solve(self):
         # Create the problem, only needs a model, bounds, and configs
