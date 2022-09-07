@@ -79,7 +79,42 @@ class LoggingConfig:
 
 @dataclass
 class SimConfig:
-    """Simulation Configuraration for Optimal Control"""
+    """Simulation Configuraration for Optimal Control
+    
+    This class is inheritted from dataclass, as such any customization to it need to be
+    done in __post_init__
+
+    required fields are:
+        num_intervals (int): number of intervals for the OCP, default to 99.
+        transcription (str, Tuple[str, Dict[str, Any]]): the transcription method to use
+        can be either a single string, and must be one of the following:
+        ["ForwardEuler", "Trapezoidal", "LGR", "LGRIntegral"]. Optionally, one can pass
+        in additional parameter, for example, 'num_stages' for LGR, which defines number
+        of stages used in collocation. So all of the following are valid:
+        - transcription="ForwardEuler" (use ForwardEuler, no configurable parameters)
+        - transcirption="LGR" (use LGR, with default 3 stages per interval)
+        - transcription = ("LGR", {"num_stages": 5}) (use LGR, with custom parameter of
+            5 stages per interval)
+        is_cyclic [bool]: true will set the problem as cyclic, default to False.
+        non_cyclic_vars [List[str]]: when the problem is cyclic, the variables that can
+            still be non-cyclic, default to empty.
+        is_condensed [bool]: if True, will condense the problem to remove "states_dot"
+            from decision variables, which would reduce IPOPT solve overhead, with
+            potential cost on function call overhead and convergence. Default to False.
+        backend [str]: numerical backend to use, must be "jax", "casadi" or "cuistom".
+            if custom, the user must provide the derivatives calls
+            (see examples/brachistochrone.py). Default to "jax"
+        hessian_approximation [str]: "limited-memory" or "exact", default to "exact"
+        boundary_conditions [Tuple[BoundaryConditionConfig]]: tuple of boundary cond
+            configurations. Default to empty
+        bounds [Tuple[BoundConfig]]: bounds all on variables, default to empty.
+        scales [Tuple[ScaleConfig]]: custom scaling for all variables, defaul to empty,
+            which uses a scale of 1
+        con_output_names [Tuple[str]]: names of the outputs to be added to the dec vars,
+            so that we can add bounds on them to constrain them.
+        logging_config [Optional[LoggingConfig]]: logging configuration, default to None.
+
+    """
 
     num_intervals: int = 99
     transcription: Union[str, Tuple[str, Optional[Dict[str, Any]]]] = "Trapezoidal"
