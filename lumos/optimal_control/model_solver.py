@@ -173,6 +173,9 @@ class ModelSolver(CompositeProblem):
                     self._model.get_var_index_in_flat(g, n)
                 ] = self._var_scales[g][n]
 
+        for _, o in self._objectives.items():
+            o.set_input_scales(self._dec_var_scales)
+
         for _, c in self._constraints.items():
             c.set_input_scales(self._dec_var_scales)
 

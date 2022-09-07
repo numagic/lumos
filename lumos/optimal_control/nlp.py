@@ -714,6 +714,8 @@ class CompositeProblem(NLPFunction):
                 f" got a constraints {name} with {c.num_in}"
             )
 
+        # Update the input scales using the nlp's dec_var_scales
+        c.set_input_scales(self._dec_var_scales)
         self._constraints.update({name: c})
 
     def delete_constraints(self, name: str):
@@ -735,6 +737,10 @@ class CompositeProblem(NLPFunction):
                 f"{name} already exists in defined objectives. Please change to a new name.",
                 f"Currently used names are {self._objectives.keys()}",
             )
+
+        # Update the decision variable scale for the objective, using the current nlp's
+        # decision variable scale
+        o.set_input_scales(self._dec_var_scales)
         self._objectives.update({name: o})
 
     def delete_objective(self, name: str):

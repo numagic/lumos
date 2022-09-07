@@ -9,6 +9,37 @@ from lumos.optimal_control.nlp import BaseObjective
 from lumos.optimal_control.model_solver import ModelSolver
 
 
+class TestModelSolver(unittest.TestCase):
+    """Test basic functionality of ModelSolver on drone model"""
+
+    def setUp(self) -> None:
+        self.model = DroneModel()
+
+        self.ms = ModelSolver(
+            model=self.model, backend="casadi", con_outputs=["f_omega"],
+        )
+
+    def test_set_scales(self):
+        """Setting custom scales lead to correct constraint and decision var scaling"""
+
+        # Check if the default scales are all correct (unscaled)
+        ms = self.ms
+        for g in ms._model.implicit_inputs:
+            for n in getattr(self.model.names, g):
+                self.assertAlmostEqual(ms._var_scales[g][n], 1.0)
+
+        # Set a scale that doesn't exist
+        with self.assertRaises(KeyError):
+            ms.set_var_scale("WrongGroup", "x", 1.0)
+
+        with self.assertRaises(KeyError):
+            ms.set_var_scale("states", "WrongName", 1.0)
+
+        # Set some correct scales
+        ms.set_var_scale("states", "x", 10.0)
+        self.assertAlmostEqual(ms._var_scales["states"]["x"], 10.0)
+
+
 def _set_base_vehicle_bounds(ms, qs_states: List[str]):
     ms.set_bounds("states", "vx", 50.0)
     ms.set_bounds("states", "vy", (-5, 5))
@@ -53,38 +84,6 @@ def _set_base_vehicle_bounds(ms, qs_states: List[str]):
     ms.set_var_scale("con_outputs", "Fz_tire_rr", 100)
 
 
-class TestModelSolver(unittest.TestCase):
-    """Test basic functionality of ModelSolver on drone model"""
-
-    def setUp(self) -> None:
-        self.model = DroneModel()
-
-        self.ms = ModelSolver(
-            model=self.model, backend="casadi", con_outputs=["f_omega"],
-        )
-
-    def test_set_scales(self):
-
-        # Check if the default scales are all correct (unscaled)
-        ms = self.ms
-        for g in ms._model.implicit_inputs:
-            for n in getattr(self.model.names, g):
-                self.assertAlmostEqual(ms._var_scales[g][n], 1.0)
-
-        # Set a scale that doesn't exist
-        with self.assertRaises(KeyError):
-            ms.set_var_scale("WrongGroup", "x", 1.0)
-
-        with self.assertRaises(KeyError):
-            ms.set_var_scale("states", "WrongName", 1.0)
-
-        # Set some correct scales
-        ms.set_var_scale("states", "x", 10.0)
-        self.assertAlmostEqual(ms._var_scales["states"]["x"], 10.0)
-
-        pass
-
-
 class TestSolveVehicleModel(unittest.TestCase):
     """Test advanced solve use-cases on vehicle model."""
 
@@ -111,14 +110,11 @@ class TestSolveVehicleModel(unittest.TestCase):
         )
 
     def test_feasibility_solve(self):
-        # Create the problem, only needs a model, bounds, and configs
-
-        # Maybe also need custom objective and constraints?
+        """Test a feasibility solve with no objectives. Check constraints are satisfied."""
         ms = self.ms
 
         # Set the required quasi-static states: some states should not be set as QS!
         qs_states = [n for n in self.model.names.states if n not in ["vx", "vy"]]
-
         _set_base_vehicle_bounds(ms, qs_states)
 
         x0 = np.ones(ms.num_dec)
@@ -128,17 +124,11 @@ class TestSolveVehicleModel(unittest.TestCase):
         for name in qs_states:
             self.assertAlmostEqual(ms.get_var(sol, "states_dot", name), 0.0, places=6)
 
-        ms.print_result(sol)
-
-    def test_solve_coasting(self):
-        # Create the problem, only needs a model, bounds, and configs
-
-        # Maybe also need custom objective and constraints?
+    def test_custom_objective_solve(self):
         ms = self.ms
 
         # Set the required quasi-static states: some states should not be set as QS!
         qs_states = [n for n in self.model.names.states if n not in ["vx", "vy"]]
-
         _set_base_vehicle_bounds(ms, qs_states)
 
         # Add a dummy object
@@ -159,19 +149,22 @@ class TestSolveVehicleModel(unittest.TestCase):
             def hessian(x):
                 return []
 
-            return obj, gradient, hessian, ([], [])
+            return {
+                "objective": obj,
+                "gradient": gradient,
+                "hessian": hessian,
+                "hessian_structure": ([], []),
+            }
 
-        obj, gradient, hessian, hessian_structure = _make_obj("inputs", "ay", 1.0)
+        ms.set_var_scale("inputs", "ax", 100)
+        objective = BaseObjective(num_in=ms.num_dec, **_make_obj("inputs", "ay", 1.0))
+        # TODO: do we need to set the scales of the new objective?
+        ms.add_objective("max_ay", objective)
 
-        objective = BaseObjective(
-            num_in=ms.num_dec,
-            objective=obj,
-            gradient=gradient,
-            hessian=hessian,
-            hessian_structure=hessian_structure,
-        )
+        objective = BaseObjective(num_in=ms.num_dec, **_make_obj("inputs", "ax", 1.0))
 
-        ms.add_objective("custom_obj", objective)
+        # TODO: do we need to set the scales of the new objective?
+        ms.add_objective("max_ax", objective)
 
         x0 = np.ones(ms.num_dec)
         sol, info = ms.solve(x0)
