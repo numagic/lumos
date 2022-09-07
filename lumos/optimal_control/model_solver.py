@@ -1,6 +1,7 @@
 from typing import Any, List, Tuple, Union
 from enum import IntEnum
 
+
 import numpy as np
 from lumos.models.base import Model
 
@@ -69,18 +70,6 @@ class ModelSolver(CompositeProblem):
 
         # Add model algebra constraints
         self.add_constraints("model_algebra", model_algebra_con)
-
-        # Add a constant objective function of 0 (by default, only solving for
-        # feasibility)
-        # TODO: maybe this should jsut exist in composite problem by default?
-        const_obj = BaseObjective(
-            num_in=model.num_implicit_var,
-            objective=lambda x: 0,
-            gradient=lambda x: np.zeros(model.num_implicit_var),
-            hessian=lambda x: [],
-            hessian_structure=([], []),
-        )
-        self.add_objective("const_obj", const_obj)
 
         # Set all constarint values (here all to 0, for equality, or 0 residual)
         self.set_cons()

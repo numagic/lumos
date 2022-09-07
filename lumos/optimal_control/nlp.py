@@ -586,6 +586,18 @@ class NLPFunction(ABC):
         zu=[],
         **user_options,
     ):
+        # If the problem has no objectives defined (feasibility solve), define a
+        # constatn objective
+        if not self._objectives:
+            const_obj = BaseObjective(
+                num_in=self.num_dec,
+                objective=lambda x: 0,
+                gradient=lambda x: np.zeros(self.num_dec),
+                hessian=lambda x: [],
+                hessian_structure=([], []),
+            )
+            self.add_objective("const_obj", const_obj)
+
         ipopt_options = self._get_default_ipopt_options()
         ipopt_options.update(user_options)
         nlp = self._construct_ipopt_problem(ipopt_options)
