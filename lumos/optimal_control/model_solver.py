@@ -220,10 +220,20 @@ class ModelSolver(CompositeProblem):
         for idx, name in enumerate(self.input_names):
             print(f"{name}: {x[idx]}")
 
-    def add_obj_from_var(self, group, name, weight: float = 1.0) -> str:
+    def add_obj_from_var(self, group: str, name: str, weight: float = 1.0) -> str:
         """Add a convenient objective that max/minimizes one of the variables.
+
+        Args:
+            group (str): name of the group
+            name (str): name of the variable
+            weight (float, optional): weight of the objective to minimnize. If -ve then
+            we will maximize. Defaults to 1.0.
+
+        Returns:
+            str: the name of the objective added.        
         
-        When this method is called multiple times, the objective is the sum of all.
+        When this method is called multiple times, we will add multiple objective to the
+        problem and the total objective is the sum of all objectives.
         """
 
         # Add a dummy object
