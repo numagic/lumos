@@ -53,10 +53,6 @@ class ScaledMeshOCP(CompositeProblem):
     # No Global variables
     global_var_names: Tuple[str] = ("mesh_scale",)
 
-    # Stage variable groups in the order used in the flat inputs to model algebra
-    # constraints
-    stage_var_groups: Tuple[str] = ("states", "inputs", "states_dot", "con_outputs")
-
     # Boundary condition configs. We need to record these as they could be overwritten
     # by general bound settings, and it is messy to check which specific boundary
     # conditions we have set just by looking at the upper and lower bound.
@@ -100,12 +96,6 @@ class ScaledMeshOCP(CompositeProblem):
         self.is_condensed: bool = sim_config.is_condensed
         self.backend: str = sim_config.backend
 
-        # Set the groups of variables to be used in the implicit call of the model.
-        # TODO: perhaps it makes more sense for this part to be taken care of by the
-        # model itself, because the model itself constructs the model algebra
-        # constraints, which means it needs to know its implicit inputs anyway.
-        self.model.set_flat_implicit_inputs(self.stage_var_groups)
-
         # Tell the model what outputs to use as constraint outputs.
         # FIXME: names is a namedtuple, so it's immutable. Using the _replace method is
         # just a workaround to change a field.
@@ -119,7 +109,7 @@ class ScaledMeshOCP(CompositeProblem):
             model_var_names=self.model.names,
             num_intervals=self.num_intervals,
             num_stages_per_interval=self.transcription.num_stages_per_interval,
-            stage_var_groups=self.stage_var_groups,
+            stage_var_groups=self.model.implicit_inputs,
             global_var_names=self.global_var_names,
         )
 

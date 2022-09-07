@@ -20,8 +20,6 @@ from lumos.optimal_control.nlp import BaseConstraints, BaseObjective, CompositeP
 
 
 class ModelSolver(CompositeProblem):
-    _input_groups: Tuple[str, ...] = ("states", "inputs", "states_dot", "con_outputs")
-
     def __init__(self, model: Model, backend: str, con_outputs: List[str] = []):
         """ModelSolver solves algebraic constraints on models.
         
@@ -39,9 +37,6 @@ class ModelSolver(CompositeProblem):
         self._model = model
 
         # Create the model algebra constraints
-        # TODO: should we try to move this `set_flat_implicit_inputs` to the model?
-        # The model algebra needs it anyway, so the model should set this, not the OCP
-        model.set_flat_implicit_inputs(self._input_groups)
         super().__init__(num_in=model.num_implicit_var)
 
         # Construct variable enum for easier indexing
@@ -109,10 +104,15 @@ class ModelSolver(CompositeProblem):
         return group + "." + name
 
     @property
+    def input_groups(self):
+        """The groups of inputs used in the implicit model algebra call"""
+        return self._model.implicit_inputs
+
+    @property
     def input_names(self):
         """TODO: this shares a lot with utils.DecVarOperator"""
         var_names = []
-        for group in self._input_groups:
+        for group in self.input_groups:
             var_names += [
                 self._construct_name(group, n)
                 for n in getattr(self._model.names, group)
@@ -159,7 +159,7 @@ class ModelSolver(CompositeProblem):
 
         self._var_scales = {
             g: {n: 1.0 for n in getattr(self._model.names, g)}
-            for g in self._input_groups
+            for g in self.input_groups
         }
 
         self._update_problem_scales()
@@ -190,7 +190,7 @@ class ModelSolver(CompositeProblem):
 
         # TODO: udpate decision variable scale
         # TODO: this could need some tidy-up, across the NLP classes
-        for g in self._input_groups:
+        for g in self.input_groups:
             for n in getattr(self._model.names, g):
                 self._dec_var_scales[
                     self._model.get_var_index_in_flat(g, n)
@@ -268,7 +268,7 @@ class TestModelSolver(unittest.TestCase):
 
         # Check if the default scales are all correct (unscaled)
         ms = self.ms
-        for g in ms._input_groups:
+        for g in ms._model.implicit_inputs:
             for n in getattr(self.model.names, g):
                 self.assertAlmostEqual(ms._var_scales[g][n], 1.0)
 

@@ -403,7 +403,7 @@ class StateSpaceModel(Model):
     # Maybe explicit_inputs, and implicit_inputs? But for explicit formulation, we also
     # need the outputs defined, so it's not just 'inputs'
     # The order of the implicit inputs
-    _implicit_inputs: Tuple[str]
+    _implicit_inputs: Tuple[str] = ("states", "inputs", "states_dot", "con_outputs")
 
     def __init__(
         self, params: Dict[str, Any] = {}, model_config: Dict[str, Any] = {},
@@ -484,8 +484,10 @@ class StateSpaceModel(Model):
     def num_states(self):
         return self.get_num_vars(group="states")
 
-    def set_flat_implicit_inputs(self, implicit_inputs: Tuple[str]):
-        self._implicit_inputs = implicit_inputs
+    @property
+    def implicit_inputs(self):
+        """Light protection of hidden attributes of implicit inputs"""
+        return self._implicit_inputs
 
     def get_state(self, states: lnp.ndarray, name: str) -> float:
         return states[self.get_var_index(group="states", name=name)]
