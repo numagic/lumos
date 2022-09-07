@@ -25,8 +25,7 @@ class ModelWithWrongConOutputs(StateSpaceModel):
         outputs = self.make_dict(group="outputs", output0=0.0, output1=1.0)
 
         return self.make_state_space_model_return(
-            states_dot=states_dot,
-            outputs=outputs,
+            states_dot=states_dot, outputs=outputs,
         )
 
 
@@ -41,25 +40,20 @@ class ModelWithCorrectConOutputs(ModelWithWrongConOutputs):
 
 
 @state_space_io(
-    states=("state0", "state1"),
-    inputs=("input0",),
-    outputs=("output0", "output1"),
+    states=("state0", "state1"), inputs=("input0",), outputs=("output0", "output1"),
 )
 class ModelWithNoConOutputs(ModelWithCorrectConOutputs):
     pass
 
 
 @state_space_io(
-    states=("state0", "state1"),
-    inputs=("input0",),
+    states=("state0", "state1"), inputs=("input0",),
 )
 class ModelWithNoOutputs(StateSpaceModel):
     def forward(self, states, inputs, mesh=0.0):
         states_dot = self.make_dict(group="states", state0=0.0, state1=0.1)
 
-        return self.make_state_space_model_return(
-            states_dot=states_dot,
-        )
+        return self.make_state_space_model_return(states_dot=states_dot,)
 
 
 class TestStateSpaceModel(unittest.TestCase):
@@ -90,8 +84,10 @@ class TestStateSpaceModel(unittest.TestCase):
         """
 
         groups_to_check = self.model.names._asdict()
-        # Drone model has an empty set for residuals, so we don't need to test that.
+        # Drone model has an empty set for residuals and con_outputs, so we don't need
+        # to test that.
         groups_to_check.pop("residuals")
+        groups_to_check.pop("con_outputs")
 
         for group, names in groups_to_check.items():
             # Correct amount of names.
@@ -175,9 +171,7 @@ AY = 8.0
 
 
 @state_space_io(
-    states=("vx", "vy"),
-    inputs=("throttle", "steer", "brake"),
-    outputs=("ax", "ay"),
+    states=("vx", "vy"), inputs=("throttle", "steer", "brake"), outputs=("ax", "ay"),
 )
 class VehicleForTest(StateSpaceModel):
     # attributes used for introducing error and test exception
@@ -253,8 +247,7 @@ class HybridPowertrain(StateSpaceModel):
         # Use direct current model outputs and flattened submodel outputs to form the
         # combined outputs vector.
         outputs = self.make_outputs_dict(
-            total_power=TOTAL_POWER,
-            total_torque=TOTAL_TORQUE,
+            total_power=TOTAL_POWER, total_torque=TOTAL_TORQUE,
         )
         return self.make_state_space_model_return(
             outputs=outputs, states_dot=states_dot

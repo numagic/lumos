@@ -746,6 +746,7 @@ class CompositeProblem(NLPFunction):
     def delete_objective(self, name: str):
         self._objectives.pop(name)
 
+
     def _compute_objective(self, x):
         return np.sum(np.hstack([p.objective(x) for p in self._objectives.values()]))
 

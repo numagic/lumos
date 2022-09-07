@@ -219,3 +219,38 @@ class ModelSolver(CompositeProblem):
 
         for idx, name in enumerate(self.input_names):
             print(f"{name}: {x[idx]}")
+
+    def add_obj_from_var(self, group, name, weight: float = 1.0) -> str:
+        """Add a convenient objective that max/minimizes one of the variables.
+        
+        When this method is called multiple times, the objective is the sum of all.
+        """
+
+        # Add a dummy object
+        def _make_obj(group, name, weight):
+            idx = self.get_var_idx(group, name)
+
+            def obj(x):
+                return weight * x[idx]
+
+            def gradient(x):
+                grad = np.zeros(self.num_dec)
+                grad[idx] = weight
+                return grad
+
+            def hessian(x):
+                return []
+
+            return {
+                "objective": obj,
+                "gradient": gradient,
+                "hessian": hessian,
+                "hessian_structure": ([], []),
+            }
+
+        obj_name = f"{group}.{name}.weight={weight}"
+        objective = BaseObjective(num_in=self.num_dec, **_make_obj(group, name, weight))
+        self.add_objective(obj_name, objective)
+
+        return obj_name
+
