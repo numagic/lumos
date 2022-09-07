@@ -16,6 +16,10 @@ class ModelSolver(CompositeProblem):
         on any standard models.
         """
 
+        assert (
+            backend == "casadi"
+        ), "we only support casadi backend for model solve at the moment"
+
         # set constraint outputs
         # TODO: now we have two places using constraint outputs, so maybe this should be
         # a model property?
@@ -40,24 +44,13 @@ class ModelSolver(CompositeProblem):
         def _hessian(*args):
             return np.array(implicit_functions["_hessian"](*args).nonzeros())
 
-        # TODO: model algebra scales, maybe this should be unified with
-        # scaled_mesh_ocp.set_scales, and move to higher level?
-        # TODO: currently hard-coded all scales to 1
-        # model.model_algebra.set_con_scales(np.ones(model.num_implicit_res))
-
-        # FIXME: need to wrap model_algebra to remove mesh and params
         # FIXME: we create CasMappedConstraints (839 in base.py), but it actually is NOT
         # a Constriant that can be executed with its .constraints method, as it requires
         # extra inputs ! (mesh, params)
         # FIXME: mapped constraints are really only called on their mapped methods!
         # So is there any point that they inherit from base_constraints?
+        # FIXME: currently the code below only works for casadi backend
         flat_params, unravel = model.get_recursive_params().tree_ravel()
-        x0 = np.ones(model.model_algebra.num_in)
-
-        # breakpoint()
-        # jac = model.model_algebra.mapped_jacobian(x0, 0.0, flat_params)
-        # jac = model.model_algebra.jacobian(x0, 0.0, flat_params)
-        # breakpoint()
         model_algebra_con = BaseConstraints(
             num_in=model.model_algebra.num_in,
             num_con=model.model_algebra.num_con,
@@ -163,10 +156,6 @@ class ModelSolver(CompositeProblem):
 
         self._constraints["model_algebra"].set_con_scales(model_algebra_scales)
 
-        # TODO: update objective function scale?
-
-        # TODO: udpate decision variable scale
-        # TODO: this could need some tidy-up, across the NLP classes
         for g in self.input_groups:
             for n in getattr(self._model.names, g):
                 self._dec_var_scales[
@@ -198,17 +187,7 @@ class ModelSolver(CompositeProblem):
             raise KeyError(
                 f"{name} is not a valid variable in the group {group}, valid names are: {list(self._var_scales[group].keys())}"
             )
-
-        # We need to update the following:
-        # 1) input scales to the objective and constraints
-        # 2) output scales of the constraints
-        # 3) decision variable scales (Is this a duplicate? if we scale overall dec var
-        # then we don't have to scale each individual constraints, and we can just leave
-        # them as unscaled?) -> in scaled_mesh_ocp, we don't do overall problem scaling
-        # but just pass the scaling to sub problems, which probably makes sense
-
         self._var_scales[group][name] = val
-
         self._update_problem_scales()
 
     def get_var(self, x, group, name):
