@@ -113,7 +113,7 @@ class ScaledMeshOCP(CompositeProblem):
             global_var_names=self.global_var_names,
         )
 
-        self._create_mesh()
+        self.set_mesh()
 
         self.logging_config = sim_config.logging_config
 
@@ -473,7 +473,7 @@ class ScaledMeshOCP(CompositeProblem):
 
         return rows, cols
 
-    def _create_mesh(self, interval_points: Optional[np.ndarray] = None):
+    def set_mesh(self, interval_points: Optional[np.ndarray] = None):
         """Creates a normalized mesh for the given transcription."""
 
         # TODO: this function should get an input that is the intervals, and then it
