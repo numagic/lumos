@@ -351,14 +351,87 @@ class TesteOCPSolve(unittest.TestCase):
             )
 
 
+def _get_default_boundary_conditions():
+    return (
+        BoundaryConditionConfig(0, "states", "x", 0.0),
+        BoundaryConditionConfig(0, "states", "x_dot", 0.0),
+        BoundaryConditionConfig(0, "states", "z", 0.0),
+        BoundaryConditionConfig(0, "states", "z_dot", 0.0),
+        BoundaryConditionConfig(0, "states", "theta", 0.0),
+        BoundaryConditionConfig(-1, "states", "x", 0.0),
+        BoundaryConditionConfig(-1, "states", "x_dot", 0.0),
+        BoundaryConditionConfig(-1, "states", "z", 5.0),
+        BoundaryConditionConfig(-1, "states", "z_dot", 0.0),
+        BoundaryConditionConfig(-1, "states", "theta", 2 * np.pi),
+    )
+
+
+def _get_default_bounds():
+    return (
+        BoundConfig(group="states", name="x", values=(-50, 50)),
+        BoundConfig(group="states", name="x_dot", values=(-50, 50)),
+        BoundConfig(group="states", name="z", values=(-50, 50)),
+        BoundConfig(group="states", name="z_dot", values=(-50, 50)),
+        BoundConfig(group="states", name="theta", values=(-10 * np.pi, 10 * np.pi)),
+        BoundConfig(group="inputs", name="f", values=(1, 20)),
+        BoundConfig(group="inputs", name="omega", values=(-10, 10)),
+        BoundConfig(group="global", name="mesh_scale", values=(0.1, 50)),
+    )
+
+
 class TestOCPWithCustomMesh(unittest.TestCase):
+    def test_create_mesh(self):
+        num_intervals = 99
+        model = DroneModel()
+        sim_config = ScaledMeshOCP.get_sim_config(
+            num_intervals=num_intervals,
+            transcription="LGR",
+            boundary_conditions=_get_default_boundary_conditions(),
+            bounds=_get_default_bounds(),
+        )
+        ocp = ScaledMeshOCP(model=model, sim_config=sim_config)
+
+        # Error if not finish at 1.0
+        with self.assertRaises(ValueError):
+            interval_points = np.linspace(0, 1.1, num_intervals + 1)
+            ocp._create_mesh(interval_points)
+
+        # Error if not start at 0.0
+        with self.assertRaises(ValueError):
+            interval_points = np.linspace(0.1, 1.0, num_intervals + 1)
+            ocp._create_mesh(interval_points)
+
+        # Error if not corrrect number of points
+        with self.assertRaises(ValueError):
+            interval_points = np.linspace(0.0, 1.0, num_intervals)
+            ocp._create_mesh(interval_points)
+
+        # Error if not monotonically increasing
+        with self.assertRaises(ValueError):
+            interval_points = np.linspace(0.0, 1.0, num_intervals + 1)
+            interval_points[1] = 0.3
+            ocp._create_mesh(interval_points)
+
+        # Do it correctly
+        interval_points = np.linspace(0.0, 1.0, num_intervals + 1)
+        ocp._create_mesh(interval_points)
+
     def test_nonuniform_on_scaled_mesh(self):
         model = DroneModel()
-        sim_config = ScaledMeshOCP.get_sim_config(num_intervals=99, transcription="LGR")
+        sim_config = ScaledMeshOCP.get_sim_config(
+            num_intervals=99,
+            transcription="LGR",
+            boundary_conditions=_get_default_boundary_conditions(),
+            bounds=_get_default_bounds(),
+        )
         ocp = ScaledMeshOCP(model=model, sim_config=sim_config)
 
         x0 = ocp.get_init_guess()
         sol, info = ocp.solve()
+
+        mesh = ocp.get_mesh_from_dec_var(sol)
+        time = mesh[-1] - mesh[0]
+        print(f"maneuver time: {time}")
 
         # breakpoint()
 

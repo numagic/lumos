@@ -60,13 +60,9 @@ class DroneSimulation(ScaledMeshOCP):
         sim_config: Dict[str, Any] = None,
     ):
 
-        model = DroneModel(
-            model_config=model_config,
-            params=model_params,
-        )
+        model = DroneModel(model_config=model_config, params=model_params,)
         super().__init__(
-            model=model,
-            sim_config=sim_config,
+            model=model, sim_config=sim_config,
         )
 
     def get_init_guess(self) -> np.ndarray:
@@ -77,10 +73,7 @@ class DroneSimulation(ScaledMeshOCP):
         )
 
         states = (
-            np.tile(
-                self.model.make_const_vector(group="states"),
-                (self.num_stages, 1),
-            )
+            np.tile(self.model.make_const_vector(group="states"), (self.num_stages, 1),)
             + 0.1
         )
         model_return = self.model.batched_forward(

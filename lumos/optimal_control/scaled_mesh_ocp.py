@@ -473,25 +473,54 @@ class ScaledMeshOCP(CompositeProblem):
 
         return rows, cols
 
-    def _create_mesh(self):
+    def _create_mesh(self, interval_points: Optional[np.ndarray] = None):
         """Creates a normalized mesh for the given transcription."""
 
         # TODO: this function should get an input that is the intervals, and then it
         # generates the mesh.
         # Normalized mesh [0, 1]
-        interval_length = 1 / self.num_intervals
+
+        if interval_points is not None:
+            # Check interval points
+            # must agree with number of intervals
+            if len(interval_points) - 1 != self.num_intervals:
+                raise ValueError(
+                    f"Expect {self.num_intervals+1} interval points but got {len(interval_points)} instead!"
+                )
+
+            # start with 0, end with 1
+            if (
+                np.abs(interval_points[0]) >= 1e-6
+                or np.abs(interval_points[-1] - 1) >= 1e-6
+            ):
+                raise ValueError(
+                    f"Interval points must be normalized and start at 0 and end at 1"
+                )
+
+            # must be monotonically increasing
+            if not np.all(np.diff(interval_points) > 0):
+                raise ValueError(f"Interval points must be monotonically increasing!")
+
+        else:
+            # use uniform intervals
+            interval_points = np.linspace(0, 1.0, self.num_intervals + 1)
+
         _normalized_interval_mesh = []
         for interval in range(self.num_intervals):
             # TODO: need to handle getting interval points better
             if isinstance(self.transcription, LGR):
+                interval_length = (
+                    interval_points[interval + 1] - interval_points[interval]
+                )
                 current_interval_mesh = (
-                    interval * interval_length
+                    interval_points[interval]
                     + self.transcription.interp_points * interval_length
                 )
             else:
-                current_interval_mesh = (
-                    np.array([interval, interval + 1]) * interval_length
+                current_interval_mesh = np.array(
+                    [interval_points[interval], interval_points[interval + 1]]
                 )
+
             _normalized_interval_mesh.append(current_interval_mesh)
 
         self._normalized_interval_mesh = _normalized_interval_mesh
