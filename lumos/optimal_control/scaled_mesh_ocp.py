@@ -475,42 +475,57 @@ class ScaledMeshOCP(CompositeProblem):
 
     def _create_mesh(self):
         """Creates a normalized mesh for the given transcription."""
+
+        # TODO: this function should get an input that is the intervals, and then it
+        # generates the mesh.
         # Normalized mesh [0, 1]
         interval_length = 1 / self.num_intervals
-        all_interval_mesh = []
+        _normalized_interval_mesh = []
         for interval in range(self.num_intervals):
-            # FIXME: need to handle getting interval points better
+            # TODO: need to handle getting interval points better
             if isinstance(self.transcription, LGR):
-                interval_mesh = (
+                current_interval_mesh = (
                     interval * interval_length
                     + self.transcription.interp_points * interval_length
                 )
             else:
-                interval_mesh = np.array([interval, interval + 1]) * interval_length
-
-            all_interval_mesh.append(interval_mesh)
-
-            # full 1d mesh, by linking all interval together without the duplicate
-            if interval == 0:
-                _flat_normalized_mesh = interval_mesh
-            else:
-                _flat_normalized_mesh = np.hstack(
-                    [_flat_normalized_mesh, interval_mesh[1:]]
+                current_interval_mesh = (
+                    np.array([interval, interval + 1]) * interval_length
                 )
+            _normalized_interval_mesh.append(current_interval_mesh)
 
-        self._matrix_normalized_mesh = np.vstack(all_interval_mesh)
-        self._flat_normalized_mesh = _flat_normalized_mesh
-        self._normalized_interval_length = (
-            self._matrix_normalized_mesh[:, -1] - self._matrix_normalized_mesh[:, 0]
-        )
+        self._normalized_interval_mesh = _normalized_interval_mesh
+
+    @property
+    def _flat_normalized_mesh(self) -> np.ndarray:
+
+        # Stack all interval mesh togther, omitting the overlapping stage.
+        mesh_list = []
+        for interval, interval_mesh in enumerate(self._normalized_interval_mesh):
+            if interval == 0:
+                mesh_list.append(interval_mesh)
+            else:
+                mesh_list.append(interval_mesh[1:])
+        return np.hstack(mesh_list)
+
+    @property
+    def _normalized_interval_length(self) -> np.ndarray:
+        _matrix_normalized_mesh = np.vstack(self._normalized_interval_mesh)
+        return _matrix_normalized_mesh[:, -1] - _matrix_normalized_mesh[:, 0]
 
     def _get_mesh_scale(self, x):
         return self.dec_var_operator.get_var(x, "global", "mesh_scale")
 
+    def get_mesh_from_dec_var(self, x: np.ndarray) -> np.ndarray:
+
+        return self.get_mesh_from_scale(self._get_mesh_scale(x))
+
     def get_mesh_from_scale(self, mesh_scale):
         """Get the unnormalized mesh as a flat array
 
-        TODO: is this method a bit redundant?
+        TODO: is this method a bit redundant? Can't really get rid of it, as sometimes
+        we know the total scale, and already want to get the mesh (which is sufficient).
+        We shouldn't really need the entire decision variable to get mesh
         """
         return self._flat_normalized_mesh * mesh_scale
 

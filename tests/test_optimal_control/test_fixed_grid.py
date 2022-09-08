@@ -71,7 +71,7 @@ class TestFixedDistanceCondensed(unittest.TestCase):
         op = self.ocp.dec_var_operator
 
         vars = op.unflatten_var(self.x0)
-        distance = self.ocp._flat_normalized_mesh * self.ocp._get_mesh_scale(self.x0)
+        distance = self.ocp.get_mesh_from_dec_var(self.x0)
         model_return = self.ocp.model.batched_forward(
             vars.states, vars.inputs, distance, self.ocp._params
         )
@@ -381,9 +381,7 @@ class TestLaptimeSimulationSolve(unittest.TestCase):
                             self.solution, group=group, name=name, stage=-1
                         )
                         self.assertAlmostEqual(
-                            start_value,
-                            end_value,
-                            delta=1e-3,
+                            start_value, end_value, delta=1e-3,
                         )
         else:
             # we just test that velocities are different, as there is no guarantee that

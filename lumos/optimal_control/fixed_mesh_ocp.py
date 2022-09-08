@@ -41,7 +41,12 @@ class FixedMeshOCP(ScaledMeshOCP):
         self._mesh_scale = mesh_scale
 
     def _get_mesh_scale(self, x):
+        """Overwrite parent method since the mesh scale is now fixed."""
         return self._mesh_scale
+
+    def get_mesh(self):
+        """Helper method for FixedMesh as we don't need any input to get the mesh."""
+        return self.get_mesh_from_scale(self._mesh_scale)
 
     def _time_objective(self, x):
         idx_end = self.dec_var_operator.get_var_index_in_dec(

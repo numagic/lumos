@@ -13,6 +13,8 @@ from lumos.optimal_control.config import (
     BoundConfig,
     ScaleConfig,
 )
+from lumos.models.drone_model import DroneModel
+from lumos.optimal_control.scaled_mesh_ocp import ScaledMeshOCP
 from lumos.simulations.drone_simulation import DroneSimulation
 
 _todo = unittest.skip("To be implemented")
@@ -347,6 +349,24 @@ class TesteOCPSolve(unittest.TestCase):
                 bc.value,
                 delta=1e-3,
             )
+
+
+class TestOCPWithCustomMesh(unittest.TestCase):
+    def test_nonuniform_on_scaled_mesh(self):
+        model = DroneModel()
+        sim_config = ScaledMeshOCP.get_sim_config(num_intervals=99, transcription="LGR")
+        ocp = ScaledMeshOCP(model=model, sim_config=sim_config)
+
+        x0 = ocp.get_init_guess()
+        sol, info = ocp.solve()
+
+        # breakpoint()
+
+        print("done")
+        pass
+
+    def test_nonuniform_on_fixed_mesh(self):
+        pass
 
 
 def test_timing_extraction():
