@@ -273,6 +273,72 @@ class LaptimeSimulation(FixedMeshOCP):
     def get_init_guess(self):
         vx = 50
 
+        from lumos.optimal_control.model_solver import ModelSolver
+
+        con_outputs = [
+            # "vehicle.Fz_tire_fl",
+            # "vehicle.Fz_tire_fr",
+            # "vehicle.Fz_tire_rl",
+            # "vehicle.Fz_tire_rr",
+            "vehicle.slip_ratio_fl",
+            "vehicle.slip_ratio_fr",
+            "vehicle.slip_ratio_rl",
+            "vehicle.slip_ratio_rr",
+            "vehicle.slip_angle_fl",
+            "vehicle.slip_angle_fr",
+            "vehicle.slip_angle_rl",
+            "vehicle.slip_angle_rr",
+        ]
+
+        ms = ModelSolver(self.model, backend="casadi", con_outputs=con_outputs)
+
+        ms.set_bounds("states", "vx", vx)
+        ms.set_bounds("states", "vy", (-5, 5))
+        ms.set_bounds("states", "yaw_rate", (-np.pi * 2, np.pi * 2))
+
+        ms.set_bounds("inputs", "throttle", (0, 1))
+        ms.set_bounds("inputs", "brake", (0, 1))
+        ms.set_bounds("inputs", "steer", (-1, 1))
+        # ms.set_bounds("con_outputs", "vehicle.Fz_tire_fl", (1, np.inf))
+        # ms.set_bounds("con_outputs", "vehicle.Fz_tire_fr", (1, np.inf))
+        # ms.set_bounds("con_outputs", "vehicle.Fz_tire_rl", (1, np.inf))
+        # ms.set_bounds("con_outputs", "vehicle.Fz_tire_rr", (1, np.inf))
+        ms.set_bounds("states", "wheel_speed_fl", (0.1, 300))
+        ms.set_bounds("states", "wheel_speed_fr", (0.1, 300))
+        ms.set_bounds("states", "wheel_speed_rl", (0.1, 300))
+        ms.set_bounds("states", "wheel_speed_rr", (0.1, 300))
+
+        for name in [
+            "vehicle.slip_ratio_fl",
+            "vehicle.slip_ratio_fr",
+            "vehicle.slip_ratio_rl",
+            "vehicle.slip_ratio_rr",
+            "vehicle.slip_angle_fl",
+            "vehicle.slip_angle_fr",
+            "vehicle.slip_angle_rl",
+            "vehicle.slip_angle_rr",
+        ]:
+            ms.set_bounds("con_outputs", name, (-0.1, 0.1))
+
+        qs_states = [
+            n for n in self.model.names.states if n not in ["time", "n", "eta"]
+        ]
+        for name in qs_states:
+            ms.set_bounds("states_dot", name, 0.0)
+
+        # set some scales
+        ms.set_var_scale("states", "wheel_speed_fl", 10)
+        ms.set_var_scale("states", "wheel_speed_fr", 10)
+        ms.set_var_scale("states", "wheel_speed_rl", 10)
+        ms.set_var_scale("states", "wheel_speed_rr", 10)
+        ms.set_var_scale("states", "vx", 10)
+        # ms.set_var_scale("con_outputs", "vehicle.Fz_tire_fl", 100)
+        # ms.set_var_scale("con_outputs", "vehicle.Fz_tire_fr", 100)
+        # ms.set_var_scale("con_outputs", "vehicle.Fz_tire_rl", 100)
+        # ms.set_var_scale("con_outputs", "vehicle.Fz_tire_rr", 100)
+        x0 = np.linspace(0, 1, ms.num_dec)
+        sol, info = ms.solve(x0)
+
         dt = np.diff(self.distance_mesh) / vx
         time = np.cumsum(np.insert(dt, 0, 0.0))
         omega_no_slip = vx / 0.33
@@ -288,6 +354,10 @@ class LaptimeSimulation(FixedMeshOCP):
             "wheel_speed_rl": omega_no_slip,
             "wheel_speed_rr": omega_no_slip,
         }
+
+        # Overwrite the original guess with qs solve
+        for k in const_states:
+            const_states[k] = ms.get_var(sol, "states", k)
 
         # FIXME: from make_vector, a lnp.ndarray will come out, which makes the inplace
         # replacement of time error out
@@ -309,6 +379,11 @@ class LaptimeSimulation(FixedMeshOCP):
             "track_curvature": 0.0,
             "track_heading": 0.0,
         }
+
+        # Overwrite the original guess with qs solve
+        for k in const_inputs:
+            const_inputs[k] = ms.get_var(sol, "inputs", k)
+
         inputs_vec = self.model.make_vector(group="inputs", **const_inputs)
         inputs = np.tile(inputs_vec, (self.num_stages, 1))
         # Use real curvature and heading
