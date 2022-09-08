@@ -151,7 +151,7 @@ class TestOCP(unittest.TestCase):
             self.ocp.update_bounds(new_bounds)
 
             op = self.ocp.dec_var_operator
-            for g in self.ocp.stage_var_groups:
+            for g in ["states", "inputs", "states_dot", "con_outputs"]:
                 for n in self.ocp.model.get_group_names(group):
                     # Ensure bounds that need to change are changed.
                     if g == group and n == name:
@@ -307,11 +307,7 @@ class TestOCP(unittest.TestCase):
 # 2) transcription method
 # 3) problem size
 @parameterized_class(
-    ("hessian_approximation",),
-    [
-        ("exact",),
-        ("limited-memory",),
-    ],
+    ("hessian_approximation",), [("exact",), ("limited-memory",),],
 )
 class TesteOCPSolve(unittest.TestCase):
     @classmethod
@@ -356,9 +352,7 @@ class TesteOCPSolve(unittest.TestCase):
 def test_timing_extraction():
     """Test that we can correctly extract ipopt timing when available"""
     sim_config = DroneSimulation.get_sim_config(
-        num_intervals=99,
-        hessian_approximation="exact",
-        transcription="Trapezoidal",
+        num_intervals=99, hessian_approximation="exact", transcription="Trapezoidal",
     )
 
     ocp = DroneSimulation(sim_config=sim_config)

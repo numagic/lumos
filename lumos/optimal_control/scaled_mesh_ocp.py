@@ -53,10 +53,6 @@ class ScaledMeshOCP(CompositeProblem):
     # No Global variables
     global_var_names: Tuple[str] = ("mesh_scale",)
 
-    # Stage variable groups in the order used in the flat inputs to model algebra
-    # constraints
-    stage_var_groups: Tuple[str] = ("states", "inputs", "states_dot", "con_outputs")
-
     # Boundary condition configs. We need to record these as they could be overwritten
     # by general bound settings, and it is messy to check which specific boundary
     # conditions we have set just by looking at the upper and lower bound.
@@ -100,9 +96,6 @@ class ScaledMeshOCP(CompositeProblem):
         self.is_condensed: bool = sim_config.is_condensed
         self.backend: str = sim_config.backend
 
-        # Set the groups of variables to be used in the implicit call of the model.
-        self.model.set_flat_implicit_inputs(self.stage_var_groups)
-
         # Tell the model what outputs to use as constraint outputs.
         # FIXME: names is a namedtuple, so it's immutable. Using the _replace method is
         # just a workaround to change a field.
@@ -116,7 +109,7 @@ class ScaledMeshOCP(CompositeProblem):
             model_var_names=self.model.names,
             num_intervals=self.num_intervals,
             num_stages_per_interval=self.transcription.num_stages_per_interval,
-            stage_var_groups=self.stage_var_groups,
+            stage_var_groups=self.model.implicit_inputs,
             global_var_names=self.global_var_names,
         )
 
@@ -132,7 +125,7 @@ class ScaledMeshOCP(CompositeProblem):
 
         # NOTE: here it is mega dangerous that if we keep appending ConvProlbme to the
         # composite problem, then it could be
-        super().__init__(num_in=self.num_dec)
+        super().__init__(num_in=self.dec_var_operator.num_dec)
         self._build_objective()
 
         self._build_model_algebra()
@@ -149,8 +142,6 @@ class ScaledMeshOCP(CompositeProblem):
                 for n in self.model.get_group_names("states_dot")
             )
 
-        # Set default varaible bounds and constraint bounds
-        self.set_default_bounds()
         self.update_bounds(sim_config.bounds)
 
         # Set specific boundary conditions of variables at certain stages
@@ -530,10 +521,6 @@ class ScaledMeshOCP(CompositeProblem):
         return self.dec_var_operator.num_stages
 
     @property
-    def num_dec(self):
-        return self.dec_var_operator.num_dec
-
-    @property
     def num_continuity_cons(self):
         return (
             self.model.num_states
@@ -564,16 +551,6 @@ class ScaledMeshOCP(CompositeProblem):
         keep = keep_rows & keep_cols
 
         return rows[keep], cols[keep]
-
-    def set_default_bounds(self):
-        """Set default bounds of decision variables without external configs.
-
-        For the base class, the default is set to be unbounded.
-        """
-
-        # Create default (-inf, inf) bounds
-        self.lb = -np.inf * np.ones(self.num_dec)
-        self.ub = np.inf * np.ones(self.num_dec)
 
     def update_bounds(self, bounds: Tuple[BoundConfig]):
         """Update variable bounds using bound configs.
