@@ -474,11 +474,19 @@ class ScaledMeshOCP(CompositeProblem):
         return rows, cols
 
     def set_mesh(self, interval_points: Optional[np.ndarray] = None):
-        """Creates a normalized mesh for the given transcription."""
+        """Creates the corresponding mesh for the given transcription
 
-        # TODO: this function should get an input that is the intervals, and then it
-        # generates the mesh.
-        # Normalized mesh [0, 1]
+        Args:
+            interval_points (Optional[np.ndarray], optional): the points that define the
+                start and end of intervals. Eg, if we have 100 intervals, we must have
+                101 interval points. If not given, then we will use uniform intervals. 
+                Defaults to None.
+
+            The interval points must be:
+            1) monotonically increasing
+            2) starting at 0.0, and ending at 1.0
+            3) must have the correct size: num_intervals + 1
+        """
 
         if interval_points is not None:
             # Check interval points
@@ -542,19 +550,42 @@ class ScaledMeshOCP(CompositeProblem):
         _matrix_normalized_mesh = np.vstack(self._normalized_interval_mesh)
         return _matrix_normalized_mesh[:, -1] - _matrix_normalized_mesh[:, 0]
 
-    def _get_mesh_scale(self, x):
+    def _get_mesh_scale(self, x: np.ndarray) -> float:
+        """Helper method to extract mesh scale from decision variable.
+
+        This would be class specific, eg, with scaled_mesh, this would be a function of
+        decision variables. But with fixed mesh, this doesn't really need decision var,
+        but we keep it there to make the API consistent.
+
+        Args:
+            x (np.ndarray): decision variable.
+
+        Returns:
+            float: the mesh scale
+        """
         return self.dec_var_operator.get_var(x, "global", "mesh_scale")
 
     def get_mesh_from_dec_var(self, x: np.ndarray) -> np.ndarray:
+        """Return the mesh of the problem.
+
+        Args:
+            x (np.ndarray): decision variables
+
+        Returns:
+            np.ndarray: the mesh used for the problem, each correspond to a mesh point
+                of a stage.
+        """
 
         return self.get_mesh_from_scale(self._get_mesh_scale(x))
 
-    def get_mesh_from_scale(self, mesh_scale):
-        """Get the unnormalized mesh as a flat array
+    def get_mesh_from_scale(self, mesh_scale: float) -> np.ndarray:
+        """Return the mesh of the problem from mesh_scale
 
-        TODO: is this method a bit redundant? Can't really get rid of it, as sometimes
-        we know the total scale, and already want to get the mesh (which is sufficient).
-        We shouldn't really need the entire decision variable to get mesh
+        Args:
+            mesh_scale (float): the scale of the mesh, mesh = normalized_mesh * scale
+
+        Returns:
+            np.ndarray: the mesh used for the problem
         """
         return self._flat_normalized_mesh * mesh_scale
 
