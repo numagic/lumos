@@ -408,27 +408,27 @@ class TestOCPWithCustomMesh(unittest.TestCase):
         # Error if not finish at 1.0
         with self.assertRaises(ValueError):
             interval_points = np.linspace(0, 1.1, num_intervals + 1)
-            ocp.set_mesh(interval_points)
+            ocp.set_normalized_mesh(interval_points)
 
         # Error if not start at 0.0
         with self.assertRaises(ValueError):
             interval_points = np.linspace(0.1, 1.0, num_intervals + 1)
-            ocp.set_mesh(interval_points)
+            ocp.set_normalized_mesh(interval_points)
 
         # Error if not corrrect number of points
         with self.assertRaises(ValueError):
             interval_points = np.linspace(0.0, 1.0, num_intervals)
-            ocp.set_mesh(interval_points)
+            ocp.set_normalized_mesh(interval_points)
 
         # Error if not monotonically increasing
         with self.assertRaises(ValueError):
             interval_points = np.linspace(0.0, 1.0, num_intervals + 1)
             interval_points[1] = 0.3
-            ocp.set_mesh(interval_points)
+            ocp.set_normalized_mesh(interval_points)
 
         # Do it correctly
         interval_points = _make_nonuniform_intervals(num_intervals)
-        ocp.set_mesh(interval_points)
+        ocp.set_normalized_mesh(interval_points)
 
         # Using a scale of 1, the mesh would be normalized.
         normalized_mesh_points = ocp.get_mesh_from_scale(1)
@@ -497,7 +497,8 @@ class TestOCPWithCustomMesh(unittest.TestCase):
         )
         ocp.add_objective("x", obj)
 
-        x0 = ocp.get_init_guess()
+        # Use some very poor, but deterministic initial guess!
+        x0 = np.ones(ocp.num_dec)
         sol, info = ocp.solve(x0, max_iter=500)
 
         mesh = ocp.get_mesh_from_dec_var(sol)
@@ -505,9 +506,8 @@ class TestOCPWithCustomMesh(unittest.TestCase):
 
         # Create some non-uniform interval length
         interval_points = _make_nonuniform_intervals(num_intervals)
-        ocp.set_mesh(interval_points)
+        ocp.set_normalized_mesh(interval_points)
 
-        x0 = ocp.get_init_guess()
         new_sol, new_info = ocp.solve(x0, max_iter=500)
         new_mesh = ocp.get_mesh_from_dec_var(new_sol)
         new_final_x = ocp.dec_var_operator.get_var(new_sol, "states", "x", -1)
@@ -545,18 +545,16 @@ class TestOCPWithCustomMesh(unittest.TestCase):
             )
         )
 
-        x0 = ocp.get_init_guess()
+        x0 = np.ones(ocp.num_dec)
         sol, info = ocp.solve(x0, max_iter=500)
 
         mesh = ocp.get_mesh_from_dec_var(sol)
         time = mesh[-1] - mesh[0]
-        print(f"maneuver time: {time}")
 
         # Create some non-uniform interval length
         interval_points = _make_nonuniform_intervals(num_intervals)
-        ocp.set_mesh(interval_points)
+        ocp.set_normalized_mesh(interval_points)
 
-        x0 = ocp.get_init_guess()
         new_sol, new_info = ocp.solve(x0, max_iter=500)
         new_mesh = ocp.get_mesh_from_dec_var(new_sol)
         new_time = new_mesh[-1] - new_mesh[0]
