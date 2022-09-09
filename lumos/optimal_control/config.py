@@ -86,6 +86,11 @@ class SimConfig:
 
     required fields are:
         num_intervals (int): number of intervals for the OCP, default to 99.
+        interval_points (Optional[np.ndarray]): when given, uses custon interval points
+            to set up the normalized_mesh. The points must be in [0, 1] and covers both
+            end points. They must also be monotonically increasing, and have a size of
+            num_intervals + 1. Default to None, which uses uniform intervals. See also:
+            ScaledMeshOCP.set_normalized_mesh
         transcription (str, Tuple[str, Dict[str, Any]]): the transcription method to use
         can be either a single string, and must be one of the following:
         ["ForwardEuler", "Trapezoidal", "LGR", "LGRIntegral"]. Optionally, one can pass
@@ -117,6 +122,7 @@ class SimConfig:
     """
 
     num_intervals: int = 99
+    interval_points: Optional[np.ndarray] = None
     transcription: Union[str, Tuple[str, Optional[Dict[str, Any]]]] = "Trapezoidal"
     is_cyclic: bool = False
     non_cyclic_vars: List[str] = field(default_factory=list)

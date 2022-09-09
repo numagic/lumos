@@ -397,7 +397,7 @@ def _make_nonuniform_intervals(num_intervals: int):
 
 
 class TestOCPWithCustomMesh(unittest.TestCase):
-    def test_create_mesh(self):
+    def test_set_normalized_mesh_after_creation(self):
         num_intervals = 99
         model = DroneModel()
         sim_config = ScaledMeshOCP.get_sim_config(
@@ -438,7 +438,25 @@ class TestOCPWithCustomMesh(unittest.TestCase):
 
         np.testing.assert_allclose(actual_interval_points, interval_points)
 
-        # Check mesh are set correctly
+    def test_set_custom_mesh_in_sim_config(self):
+        num_intervals = 99
+        interval_points = _make_nonuniform_intervals(num_intervals)
+        model = DroneModel()
+        sim_config = ScaledMeshOCP.get_sim_config(
+            num_intervals=num_intervals,
+            interval_points=interval_points,
+            transcription="LGR",
+        )
+        ocp = ScaledMeshOCP(model=model, sim_config=sim_config)
+
+        # Check mesh created is correct
+        # Using a scale of 1, the mesh would be normalized.
+        normalized_mesh_points = ocp.get_mesh_from_scale(1)
+        actual_interval_points = normalized_mesh_points[
+            :: ocp.dec_var_operator.num_stages_per_interval - 1
+        ]
+
+        np.testing.assert_allclose(actual_interval_points, interval_points)
 
     def test_nonuniform_on_fixed_mesh(self):
         """Test changing mesh after problem creation still yields the correct results."""

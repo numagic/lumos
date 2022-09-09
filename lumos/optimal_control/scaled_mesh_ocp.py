@@ -113,7 +113,7 @@ class ScaledMeshOCP(CompositeProblem):
             global_var_names=self.global_var_names,
         )
 
-        self.set_normalized_mesh()
+        self.set_normalized_mesh(sim_config.interval_points)
 
         self.logging_config = sim_config.logging_config
 
@@ -513,7 +513,7 @@ class ScaledMeshOCP(CompositeProblem):
             # use uniform intervals
             interval_points = np.linspace(0, 1.0, self.num_intervals + 1)
 
-        _normalized_interval_mesh = []
+        self._normalized_interval_mesh = []
         for interval in range(self.num_intervals):
             # TODO: need to handle getting interval points better
             if isinstance(self.transcription, LGR):
@@ -529,13 +529,10 @@ class ScaledMeshOCP(CompositeProblem):
                     [interval_points[interval], interval_points[interval + 1]]
                 )
 
-            _normalized_interval_mesh.append(current_interval_mesh)
-
-        self._normalized_interval_mesh = _normalized_interval_mesh
+            self._normalized_interval_mesh.append(current_interval_mesh)
 
     @property
     def _flat_normalized_mesh(self) -> np.ndarray:
-
         # Stack all interval mesh togther, omitting the overlapping stage.
         mesh_list = []
         for interval, interval_mesh in enumerate(self._normalized_interval_mesh):
