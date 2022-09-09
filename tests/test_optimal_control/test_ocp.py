@@ -361,11 +361,11 @@ def _get_default_boundary_conditions():
         BoundaryConditionConfig(0, "states", "x_dot", 0.0),
         BoundaryConditionConfig(0, "states", "z", 0.0),
         BoundaryConditionConfig(0, "states", "z_dot", 0.0),
-        BoundaryConditionConfig(0, "states", "theta", 0.0),
+        BoundaryConditionConfig(0, "states", "theta", -np.pi / 4),
         BoundaryConditionConfig(-1, "states", "x_dot", 0.0),
         BoundaryConditionConfig(-1, "states", "z", 0.0),
         BoundaryConditionConfig(-1, "states", "z_dot", 0.0),
-        BoundaryConditionConfig(-1, "states", "theta", 2 * np.pi),
+        BoundaryConditionConfig(-1, "states", "theta", 0.0),
     )
 
 
