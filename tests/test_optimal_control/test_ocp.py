@@ -516,7 +516,7 @@ class TestOCPWithCustomMesh(unittest.TestCase):
         ocp.add_objective("x", obj)
 
         # Use some very poor, but deterministic initial guess!
-        x0 = np.ones(ocp.num_dec)
+        x0 = np.zeros(ocp.num_dec) + 0.1
         sol, info = ocp.solve(x0, max_iter=500)
 
         mesh = ocp.get_mesh_from_dec_var(sol)
@@ -563,7 +563,7 @@ class TestOCPWithCustomMesh(unittest.TestCase):
             )
         )
 
-        x0 = np.ones(ocp.num_dec)
+        x0 = np.zeros(ocp.num_dec) + 0.1
         sol, info = ocp.solve(x0, max_iter=500)
 
         mesh = ocp.get_mesh_from_dec_var(sol)
