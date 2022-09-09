@@ -1,4 +1,5 @@
 import unittest
+import os
 from typing import Any, Tuple
 
 import numpy as np
@@ -13,6 +14,11 @@ from lumos.optimal_control.config import (
     BoundConfig,
     ScaleConfig,
 )
+from lumos.optimal_control.nlp import BaseObjective
+from lumos.models.composition import ModelMaker
+from lumos.models.drone_model import DroneModel
+from lumos.optimal_control.fixed_mesh_ocp import FixedMeshOCP
+from lumos.optimal_control.scaled_mesh_ocp import ScaledMeshOCP
 from lumos.simulations.drone_simulation import DroneSimulation
 
 _todo = unittest.skip("To be implemented")
@@ -347,6 +353,252 @@ class TesteOCPSolve(unittest.TestCase):
                 bc.value,
                 delta=1e-3,
             )
+
+
+def _get_default_boundary_conditions():
+    return (
+        BoundaryConditionConfig(0, "states", "x", 0.0),
+        BoundaryConditionConfig(0, "states", "x_dot", 0.0),
+        BoundaryConditionConfig(0, "states", "z", 0.0),
+        BoundaryConditionConfig(0, "states", "z_dot", 0.0),
+        BoundaryConditionConfig(0, "states", "theta", -np.pi / 4),
+        BoundaryConditionConfig(-1, "states", "x_dot", 0.0),
+        BoundaryConditionConfig(-1, "states", "z", 0.0),
+        BoundaryConditionConfig(-1, "states", "z_dot", 0.0),
+        BoundaryConditionConfig(-1, "states", "theta", 0.0),
+    )
+
+
+def _get_default_bounds():
+    return (
+        BoundConfig(group="states", name="x", values=(-50, 50)),
+        BoundConfig(group="states", name="x_dot", values=(-50, 50)),
+        BoundConfig(group="states", name="z", values=(-50, 50)),
+        BoundConfig(group="states", name="z_dot", values=(-50, 50)),
+        BoundConfig(group="states", name="theta", values=(-10 * np.pi, 10 * np.pi)),
+        BoundConfig(group="inputs", name="f", values=(1, 20)),
+        BoundConfig(group="inputs", name="omega", values=(-10, 10)),
+    )
+
+
+def _make_nonuniform_intervals(num_intervals: int):
+    first_half = int(num_intervals / 2)
+    second_half = num_intervals - first_half
+    first_half_end = 0.2  # make this not doo different to old one to make interpolation
+    # easier with coarse grid, but different enough to trigger errors.
+    interval_points = np.hstack(
+        [
+            np.linspace(0, first_half_end, first_half),
+            np.linspace(first_half_end + 0.01, 1.0, second_half + 1),
+        ]
+    )
+
+    return interval_points
+
+
+class TestOCPWithCustomMesh(unittest.TestCase):
+    def test_set_normalized_mesh_after_creation(self):
+        num_intervals = 99
+        model = DroneModel()
+        sim_config = ScaledMeshOCP.get_sim_config(
+            num_intervals=num_intervals, transcription="LGR",
+        )
+        ocp = ScaledMeshOCP(model=model, sim_config=sim_config)
+
+        # Error if not finish at 1.0
+        with self.assertRaises(ValueError):
+            interval_points = np.linspace(0, 1.1, num_intervals + 1)
+            ocp.set_normalized_mesh(interval_points)
+
+        # Error if not start at 0.0
+        with self.assertRaises(ValueError):
+            interval_points = np.linspace(0.1, 1.0, num_intervals + 1)
+            ocp.set_normalized_mesh(interval_points)
+
+        # Error if not corrrect number of points
+        with self.assertRaises(ValueError):
+            interval_points = np.linspace(0.0, 1.0, num_intervals)
+            ocp.set_normalized_mesh(interval_points)
+
+        # Error if not monotonically increasing
+        with self.assertRaises(ValueError):
+            interval_points = np.linspace(0.0, 1.0, num_intervals + 1)
+            interval_points[1] = 0.3
+            ocp.set_normalized_mesh(interval_points)
+
+        # Do it correctly
+        interval_points = _make_nonuniform_intervals(num_intervals)
+        ocp.set_normalized_mesh(interval_points)
+
+        # Using a scale of 1, the mesh would be normalized.
+        normalized_mesh_points = ocp.get_mesh_from_scale(1)
+        actual_interval_points = normalized_mesh_points[
+            :: ocp.dec_var_operator.num_stages_per_interval - 1
+        ]
+
+        np.testing.assert_allclose(actual_interval_points, interval_points)
+
+    def test_set_custom_mesh_in_sim_config(self):
+        num_intervals = 99
+        interval_points = _make_nonuniform_intervals(num_intervals)
+        model = DroneModel()
+        sim_config = ScaledMeshOCP.get_sim_config(
+            num_intervals=num_intervals,
+            interval_points=interval_points,
+            transcription="LGR",
+        )
+        ocp = ScaledMeshOCP(model=model, sim_config=sim_config)
+
+        # Check mesh created is correct
+        # Using a scale of 1, the mesh would be normalized.
+        normalized_mesh_points = ocp.get_mesh_from_scale(1)
+        actual_interval_points = normalized_mesh_points[
+            :: ocp.dec_var_operator.num_stages_per_interval - 1
+        ]
+
+        np.testing.assert_allclose(actual_interval_points, interval_points)
+
+    def test_nonuniform_on_fixed_mesh(self):
+        """Test changing mesh after problem creation still yields the correct results."""
+        num_intervals = 99
+
+        model = DroneModel()
+        ocp = FixedMeshOCP(
+            model=model,
+            sim_config=FixedMeshOCP.get_sim_config(
+                num_intervals=num_intervals,
+                transcription="LGR",
+                backend="jax",
+                boundary_conditions=_get_default_boundary_conditions(),
+                bounds=_get_default_bounds(),
+            ),
+            mesh_scale=1.0,  # work over a fixed 1.0sec span
+        )
+
+        # Remove the default time objective
+        # TODO: the time objective shouldn't be there by default in the first place
+        ocp.delete_objective("time")
+
+        # Create new objective, say minimize x-distance travelled (so move to the left)
+        def _objective(x):
+            idx_end = ocp.dec_var_operator.get_var_index_in_dec(
+                group="states", name="x", stage=-1
+            )
+
+            idx_start = ocp.dec_var_operator.get_var_index_in_dec(
+                group="states", name="x", stage=0
+            )
+            return x[idx_end] - x[idx_start]
+
+        def _gradient(x):
+            idx_end = ocp.dec_var_operator.get_var_index_in_dec(
+                group="states", name="x", stage=-1
+            )
+
+            idx_start = ocp.dec_var_operator.get_var_index_in_dec(
+                group="states", name="x", stage=0
+            )
+            grad = np.zeros_like(x)
+            grad[idx_end] = 1
+            grad[idx_start] = -1
+            return grad
+
+        obj = BaseObjective(
+            num_in=ocp.num_dec,
+            objective=lambda x: _objective(x),
+            gradient=lambda x: _gradient(x),
+            hessian=lambda x: np.array([]),
+            hessian_structure=(
+                np.array([], dtype=np.int32),
+                np.array([], dtype=np.int32),
+            ),
+        )
+        ocp.add_objective("x", obj)
+
+        # Use some very poor, but deterministic initial guess!
+        x0 = np.zeros(ocp.num_dec) + 0.1
+        sol, info = ocp.solve(x0, max_iter=500)
+
+        mesh = ocp.get_mesh_from_dec_var(sol)
+        final_x = ocp.dec_var_operator.get_var(sol, "states", "x", -1)
+
+        # Create some non-uniform interval length
+        interval_points = _make_nonuniform_intervals(num_intervals)
+        ocp.set_normalized_mesh(interval_points)
+
+        new_sol, new_info = ocp.solve(x0, max_iter=500)
+        new_mesh = ocp.get_mesh_from_dec_var(new_sol)
+        new_final_x = ocp.dec_var_operator.get_var(new_sol, "states", "x", -1)
+
+        # Check if results are the same
+        self.assertAlmostEqual(final_x, new_final_x, places=1)
+
+        # Check if the results on the same index point (eg, stage 33) are NOT the same
+        for stage in [10, 30, ocp.num_stages - 20]:
+            old_val = ocp.dec_var_operator.get_var(sol, "states", "x_dot", stage)
+            new_val = ocp.dec_var_operator.get_var(new_sol, "states", "x_dot", stage)
+
+            self.assertNotAlmostEqual(old_val, new_val, places=1)
+
+        # Check if the results on the same mesh are the same
+        for stage in [10, 30, ocp.num_stages - 20]:
+            old_val = ocp.dec_var_operator.get_var(sol, "states", "x_dot", stage)
+            # Get the value of the results on new mesh by interpolating them to old mesh
+            # point
+            new_val = np.interp(
+                mesh[stage],
+                new_mesh,
+                ocp.dec_var_operator.get_var(new_sol, "states", "x_dot"),
+            )
+
+            self.assertAlmostEqual(old_val, new_val, places=1)
+
+    def test_nonuniform_on_scaled_mesh(self):
+        """Test changing mesh after problem creation still yields the correct results."""
+        num_intervals = 99
+
+        ocp = DroneSimulation(
+            sim_config=DroneSimulation.get_sim_config(
+                num_intervals=num_intervals, transcription="LGR", backend="jax"
+            )
+        )
+
+        x0 = np.zeros(ocp.num_dec) + 0.1
+        sol, info = ocp.solve(x0, max_iter=500)
+
+        mesh = ocp.get_mesh_from_dec_var(sol)
+        time = mesh[-1] - mesh[0]
+
+        # Create some non-uniform interval length
+        interval_points = _make_nonuniform_intervals(num_intervals)
+        ocp.set_normalized_mesh(interval_points)
+
+        new_sol, new_info = ocp.solve(x0, max_iter=500)
+        new_mesh = ocp.get_mesh_from_dec_var(new_sol)
+        new_time = new_mesh[-1] - new_mesh[0]
+
+        # Check if results are the same
+        self.assertAlmostEqual(time, new_time, places=1)
+
+        # Check if the results on the same index point (eg, stage 33) are NOT the same
+        for stage in [10, 30, ocp.num_stages - 20]:
+            old_val = ocp.dec_var_operator.get_var(sol, "states", "x_dot", stage)
+            new_val = ocp.dec_var_operator.get_var(new_sol, "states", "x_dot", stage)
+
+            self.assertNotAlmostEqual(old_val, new_val, places=1)
+
+        # Check if the results on the same mesh are the same
+        for stage in [10, 30, ocp.num_stages - 20]:
+            old_val = ocp.dec_var_operator.get_var(sol, "states", "x_dot", stage)
+            # Get the value of the results on new mesh by interpolating them to old mesh
+            # point
+            new_val = np.interp(
+                mesh[stage],
+                new_mesh,
+                ocp.dec_var_operator.get_var(new_sol, "states", "x_dot"),
+            )
+
+            self.assertAlmostEqual(old_val, new_val, places=1)
 
 
 def test_timing_extraction():
