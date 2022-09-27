@@ -444,16 +444,6 @@ class StateSpaceModel(Model):
         self.set_recursive_params(params)
         return self.forward_with_arrays(states, inputs, mesh)
 
-    def make_state_space_model_return(
-        self, states_dot: Dict[str, float], outputs: Dict[str, float] = None,
-    ) -> StateSpaceModelReturn:
-        """Thin wrapper for StateSpaceModelReturn to handle con_outputs automatically."""
-        kwargs = {"states_dot": states_dot}
-        if outputs is not None:
-            kwargs["outputs"] = outputs
-
-        return StateSpaceModelReturn(**kwargs)
-
     def _construct_io_names(self):
         """Create model io names while also taking into account submodels compositoin.
 

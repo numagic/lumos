@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional
 
 import lumos.numpy as lnp
-from lumos.models.base import StateSpaceModel, state_space_io
+from lumos.models.base import StateSpaceModel, state_space_io, StateSpaceModelReturn
 from lumos.models.kinematics import TrackPosition2D
 from lumos.models.vehicles.simple_vehicle import SimpleVehicle
 
@@ -73,6 +73,4 @@ class SimpleVehicleOnTrack(StateSpaceModel):
         # Assemble final outputs - there are no direct outputs from the current one
         outputs = self.make_outputs_dict()
 
-        return self.make_state_space_model_return(
-            states_dot=states_dot, outputs=outputs,
-        )
+        return StateSpaceModelReturn(states_dot=states_dot, outputs=outputs,)
