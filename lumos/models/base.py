@@ -158,10 +158,24 @@ class Model(CompositeModel):
 
         self.names = ModelIO(
             inputs=self._direct_names.inputs,
-            residuals=self._direct_names.residuals,
+            residuals=self._direct_names.residuals
+            + tuple(self._collect_children_residuals()),
             outputs=self._direct_names.outputs
             + tuple(self._collect_children_outputs()),
         )
+
+    def _collect_children_residuals(self):
+        """Collect all children residuals and prefix them with submodel_name
+
+        eg: the 'net_moment' output of the 'body' submodel becomes 'body.net_moment'
+        """
+        children_residuals = []
+        if not self.is_leaf():
+            for submodel_name, model in self._submodels.items():
+                children_residuals += [
+                    submodel_name + "." + n for n in model.names.residuals
+                ]
+        return children_residuals
 
     def _collect_children_outputs(self):
         """Collect all children outputs and prefix them with submodel_name
@@ -431,18 +445,12 @@ class StateSpaceModel(Model):
         return self.forward_with_arrays(states, inputs, mesh)
 
     def make_state_space_model_return(
-        self,
-        states_dot: Dict[str, float],
-        outputs: Dict[str, float] = None,
-        residuals: Dict[str, float] = None,
+        self, states_dot: Dict[str, float], outputs: Dict[str, float] = None,
     ) -> StateSpaceModelReturn:
         """Thin wrapper for StateSpaceModelReturn to handle con_outputs automatically."""
         kwargs = {"states_dot": states_dot}
         if outputs is not None:
             kwargs["outputs"] = outputs
-
-        if residuals is not None:
-            kwargs["residuals"] = residuals
 
         return StateSpaceModelReturn(**kwargs)
 
@@ -458,7 +466,8 @@ class StateSpaceModel(Model):
             states=self._direct_names.states,
             states_dot=self._direct_names.states_dot,
             con_outputs=self._direct_names.con_outputs,
-            residuals=self._direct_names.residuals,
+            residuals=self._direct_names.residuals
+            + tuple(self._collect_children_residuals()),
             outputs=self._direct_names.outputs
             + tuple(self._collect_children_outputs()),
         )
@@ -468,6 +477,14 @@ class StateSpaceModel(Model):
         for c in self.get_group_names("con_outputs"):
             if c not in self.get_group_names("outputs"):
                 raise ValueError(f"constraint outputs {c} not found in outputs")
+
+        # Ensure residuals all exist
+        for c in self.get_group_names("residuals"):
+            if c not in self.get_group_names("outputs"):
+                raise ValueError(f"residual {c} not found in outputs")
+
+    def _extract_residuals(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
+        return {c: outputs[c] for c in self.get_group_names("residuals")}
 
     def _extract_con_outputs(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
         return {c: outputs[c] for c in self.get_group_names("con_outputs")}
@@ -502,11 +519,16 @@ class StateSpaceModel(Model):
         kwargs = {
             g: self.make_vector(g, **getattr(model_return, g))
             for g in model_return._fields
-            if g != "con_outputs"
+            if g not in ["con_outputs", "residuals"]
         }
 
+        # TODO: this is where we extract con_outputs, does this make sense?
         kwargs["con_outputs"] = self.make_vector(
             "con_outputs", **self._extract_con_outputs(model_return.outputs)
+        )
+
+        kwargs["residuals"] = self.make_vector(
+            "residuals", **self._extract_residuals(model_return.outputs)
         )
 
         return ArrayStateSpaceModelReturn(**kwargs)
@@ -554,6 +576,7 @@ class StateSpaceModel(Model):
         return res
 
     def _split_flat_vars(self, flat_vars: lnp.ndarray):
+        """Split the flat stage variables into dictionary of arrays."""
         split_indices = list(
             np.cumsum([self.get_num_vars(g) for g in self._implicit_inputs])[:-1]
         )
@@ -565,6 +588,12 @@ class StateSpaceModel(Model):
         self, flat_vars: lnp.ndarray, mesh: float, params,
     ) -> lnp.ndarray:
         self.set_recursive_params(params)
+        # TODO: split to dict of arrays -> call in implicit with forward_with_arrays
+        # -> convert to dict again, call with dict, can we simplify?
+        #
+        # NOTE: that's ok for states and inputs, but implicit also requires states_dot
+        # and con_outputs, which we will never use as dict, and it's easier to use them
+        # as arrays!
         dict_vars = self._split_flat_vars(flat_vars)
 
         return self.implicit(**dict_vars, mesh=mesh)
