@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1665061208760,
+  "lastUpdate": 1665072600025,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -26708,6 +26708,210 @@ window.BENCHMARK_DATA = {
           {
             "name": "jax.10000.nlp.hessian",
             "value": 3.8748772057,
+            "unit": "sec"
+          },
+          {
+            "name": "num_total",
+            "value": 25,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 0,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 42.16,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "92360845+yunlongxu-numagic@users.noreply.github.com",
+            "name": "Yunlong Xu",
+            "username": "yunlongxu-numagic"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9ff5a4d81258c8e6000b7c2cb7197832903cf313",
+          "message": "automatic collection of residuals\n\n- Summary\r\n1) we make the collection of residuals automatic, so the users no longer have to pipe residuals from leaf node submodels all the way manually to top level model.\r\n2) the make_state_space_model_return method is made obsolete, the user should directly construct StateSpaceModelReturn\r\n\r\n- How does it work under the hood?\r\nWhat has been done is very similar to con_outputs. We leverage the mechanism that automatically collects outputs, and the user have to define what subsets of the outputs constitute a 'residual'.\r\n\r\n- Why is it different to how we treat con_outputs?\r\n\r\n1) con_outputs allow the user to set equality and inequality bounds on the variables, while residuals are always constrained to 0\r\n2) con_outputs are added to decision variables, and residuals are not.\r\n3) con_outputs are a property of the problem, and set up with the definition of an optimal control problem (OCP).\r\nresiduals are a property of the model, it defines a DAE. Imagine when we can use different tire sumodels in a vehicle model, while some tire models contain residuals as they are formulated as DAEs, and some other tire models don't, we want the top-level model to be able to automatically decide what residuals it have with different submodel compositions! As such, residuals are a model property\r\n\r\n- How should I change my model?\r\nAt the model where residuals exist (see this diff as an example)\r\n1) add some names to the outputs that we would later use as residuals, eg, \"res_ax\", \"res_ay\". These simply add some outputs to the model, they don't automatically become residuals yet.\r\n2) define the residual names, which must be a subset of the outputs.\r\n3) populate the residual outputs just like any other ordinary outputs\r\n\r\nAt parent models, simply remove all the operations that pipe residuals from child models",
+          "timestamp": "2022-10-06T14:34:52+02:00",
+          "tree_id": "94b0cbb63ad851bcc2f006cd8d66bc7bef2a46c2",
+          "url": "https://github.com/numagic/lumos/commit/9ff5a4d81258c8e6000b7c2cb7197832903cf313"
+        },
+        "date": 1665072598894,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "jax_jit.model_algebra.constraints",
+            "value": 3.053568951999978,
+            "unit": "sec"
+          },
+          {
+            "name": "jax_jit.model_algebra.jacobian",
+            "value": 11.460774258000015,
+            "unit": "sec"
+          },
+          {
+            "name": "jax_jit.model_algebra.hessian",
+            "value": 56.05554900200002,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.objective",
+            "value": 0.00020480969999994158,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.gradient",
+            "value": 0.00039997939999807385,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.constraints",
+            "value": 0.016837695399999575,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.jacobian",
+            "value": 0.020319250299996837,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.hessian",
+            "value": 0.025756732400003556,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.objective",
+            "value": 0.00048455950000061423,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.gradient",
+            "value": 0.001190658699999858,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.constraints",
+            "value": 0.15909901440000454,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.jacobian",
+            "value": 0.20573411529999816,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.hessian",
+            "value": 0.2649899681000022,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.objective",
+            "value": 0.0020286065000050257,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.gradient",
+            "value": 0.011431710400006522,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.constraints",
+            "value": 1.9062217001000021,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.jacobian",
+            "value": 2.3540563133999965,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.hessian",
+            "value": 2.9793300236999927,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.objective",
+            "value": 0.00021876939999856403,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.gradient",
+            "value": 0.0003643389999979263,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.constraints",
+            "value": 0.013788082600001417,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.jacobian",
+            "value": 0.022847548100003223,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.hessian",
+            "value": 0.040417270499995085,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.objective",
+            "value": 0.0004396103000090079,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.gradient",
+            "value": 0.0011523610000040208,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.constraints",
+            "value": 0.020550166299995,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.jacobian",
+            "value": 0.10861848609999925,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.hessian",
+            "value": 0.24098935850000772,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.objective",
+            "value": 0.0019017606999909731,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.gradient",
+            "value": 0.010673093599996264,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.constraints",
+            "value": 0.08267387839999855,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.jacobian",
+            "value": 1.0269213465000007,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.hessian",
+            "value": 2.2761245962000087,
             "unit": "sec"
           },
           {
