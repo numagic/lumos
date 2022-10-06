@@ -44,9 +44,7 @@ class DroneModel(StateSpaceModel):
             "outputs", sin_theta=lnp.sin(theta), f_omega=inputs["omega"] * inputs["f"],
         )
 
-        return self.make_state_space_model_return(
-            states_dot=states_dot, outputs=outputs,
-        )
+        return StateSpaceModelReturn(states_dot=states_dot, outputs=outputs,)
 
     @classmethod
     def get_default_params(self) -> Dict[str, Any]:

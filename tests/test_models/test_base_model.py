@@ -9,6 +9,7 @@ from lumos.models.base import (
     Model,
     model_io,
     ModelReturn,
+    StateSpaceModelReturn,
 )
 from lumos.models.drone_model import DroneModel
 
@@ -24,9 +25,7 @@ class ModelWithWrongConOutputs(StateSpaceModel):
         states_dot = self.make_dict(group="states", state0=0.0, state1=0.1)
         outputs = self.make_dict(group="outputs", output0=0.0, output1=1.0)
 
-        return self.make_state_space_model_return(
-            states_dot=states_dot, outputs=outputs,
-        )
+        return StateSpaceModelReturn(states_dot=states_dot, outputs=outputs,)
 
 
 @state_space_io(
@@ -53,7 +52,7 @@ class ModelWithNoOutputs(StateSpaceModel):
     def forward(self, states, inputs, mesh=0.0):
         states_dot = self.make_dict(group="states", state0=0.0, state1=0.1)
 
-        return self.make_state_space_model_return(states_dot=states_dot,)
+        return StateSpaceModelReturn(states_dot=states_dot,)
 
 
 class TestStateSpaceModel(unittest.TestCase):
@@ -212,9 +211,7 @@ class VehicleForTest(StateSpaceModel):
         outputs = self.make_outputs_dict(ax=AX, ay=AY)
 
         states_dot = self.make_dict("states_dot", vx=0.1, vy=0.2)
-        return self.make_state_space_model_return(
-            states_dot=states_dot, outputs=outputs
-        )
+        return StateSpaceModelReturn(states_dot=states_dot, outputs=outputs)
 
 
 @state_space_io(
@@ -249,9 +246,7 @@ class HybridPowertrain(StateSpaceModel):
         outputs = self.make_outputs_dict(
             total_power=TOTAL_POWER, total_torque=TOTAL_TORQUE,
         )
-        return self.make_state_space_model_return(
-            outputs=outputs, states_dot=states_dot
-        )
+        return StateSpaceModelReturn(outputs=outputs, states_dot=states_dot)
 
 
 @model_io(inputs=("long_slip", "lat_slip"), outputs=("Fx", "Fy"))

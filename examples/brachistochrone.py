@@ -74,9 +74,7 @@ class TimeModel(StateSpaceModel):
         # Assemble result
         states_dot = self.make_dict(group="states_dot", v=v_dot, x=dx_dt, y=dy_dt,)
         outputs = self.make_dict(group="outputs", theta=theta)
-        return self.make_state_space_model_return(
-            states_dot=states_dot, outputs=outputs
-        )
+        return StateSpaceModelReturn(states_dot=states_dot, outputs=outputs)
 
     @classmethod
     def get_default_params(self) -> Dict[str, Any]:
@@ -257,7 +255,7 @@ class DistanceModel(StateSpaceModel):
             group="states_dot", time=time_dot, v=v_dot, y=y_dot,
         )
 
-        return self.make_state_space_model_return(states_dot=states_dot)
+        return StateSpaceModelReturn(states_dot=states_dot)
 
     @classmethod
     def get_default_params(self) -> Dict[str, Any]:

@@ -63,7 +63,7 @@ class TimeModel(StateSpaceModel):
             y_dot=lnp.sin(theta) * self.get_state(states, "v"),
         )
         outputs = self.make_vector(group="outputs", theta=theta)
-        return self.make_state_space_model_return(
+        return StateSpaceModelReturn(
             states_dot=states_dot, outputs=outputs
         )
 

@@ -286,7 +286,7 @@ class TestLaptimeSimulation(unittest.TestCase):
         self.assertAlmostEqual(model_params.get_param("vehicle.vehicle_mass"), mass)
 
         # It's a little tricky setting 'how much they shouldn't be euqal'
-        self.assertNotAlmostEqual(abs_con, new_abs_con, places=3)
+        self.assertNotAlmostEqual(abs_con, new_abs_con, places=6)
 
 
 # NOTE: disabled "limited-memory" test for now because the convergence is really bad...
