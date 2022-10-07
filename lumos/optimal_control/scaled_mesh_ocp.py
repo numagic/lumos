@@ -97,11 +97,7 @@ class ScaledMeshOCP(CompositeProblem):
         self.backend: str = sim_config.backend
 
         # Tell the model what outputs to use as constraint outputs.
-        # FIXME: names is a namedtuple, so it's immutable. Using the _replace method is
-        # just a workaround to change a field.
-        self.model.names = self.model.names._replace(
-            con_outputs=sim_config.con_output_names
-        )
+        self.model.set_con_outputs(con_outputs=sim_config.con_output_names)
 
         # Create a decision variable operator
         # NOTE: we factor this out of OCP to simplify and to seperate responsibility

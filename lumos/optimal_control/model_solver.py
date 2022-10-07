@@ -32,12 +32,9 @@ class ModelSolver(CompositeProblem):
         ), "we only support casadi backend for model solve at the moment"
 
         # set constraint outputs
-        # TODO: now we have two places using constraint outputs, so maybe this should be
-        # a model property?
-        # TODO: this is also used in scaled_mesh_ocp
         if con_outputs is None:
             con_outputs = []
-        model.names = model.names._replace(con_outputs=con_outputs)
+        model.set_con_outputs(con_outputs=con_outputs)
 
         # TODO: can/should we get away with not storing the model?
         self._model = model

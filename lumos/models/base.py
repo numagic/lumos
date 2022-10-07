@@ -473,6 +473,12 @@ class StateSpaceModel(Model):
             if c not in self.get_group_names("outputs"):
                 raise ValueError(f"residual {c} not found in outputs")
 
+    def set_con_outputs(self, con_outputs: Tuple[str, ...]) -> None:
+        """Set the con_outputs of the model."""
+        # NOTE: names is a namedtuple, so it's immutable. Using the _replace method is
+        # just a workaround to change a field.
+        self.names = self.names._replace(con_outputs=con_outputs)
+
     def _extract_residuals(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
         return {c: outputs[c] for c in self.get_group_names("residuals")}
 
