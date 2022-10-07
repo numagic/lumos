@@ -29,8 +29,7 @@ class TestModekMaker(TestCase):
         ModelMaker.add_to_registry(DummyRigidVehicle)
 
         self.assertEqual(
-            ModelMaker.get_model_class(DummyRigidVehicle.__name__),
-            DummyRigidVehicle,
+            ModelMaker.get_model_class(DummyRigidVehicle.__name__), DummyRigidVehicle,
         )
 
     def test_make_config(self):
@@ -56,8 +55,7 @@ class TestModekMaker(TestCase):
         direct_submodel_config = DummyRigidVehicle.get_default_submodel_config()
         for name, type_name in direct_submodel_config.items():
             self.assertIsInstance(
-                model.get_submodel(name),
-                ModelMaker.get_model_class(type_name),
+                model.get_submodel(name), ModelMaker.get_model_class(type_name),
             )
 
         # Check grandchildren model type
@@ -70,8 +68,7 @@ class TestModekMaker(TestCase):
         direct_submodel_config = DummyRigidVehicle.get_default_submodel_config()
         for name, type_name in direct_submodel_config.items():
             self.assertIsInstance(
-                model.get_submodel(name),
-                ModelMaker.get_model_class(type_name),
+                model.get_submodel(name), ModelMaker.get_model_class(type_name),
             )
 
         # Check grandchildren model type
@@ -154,8 +151,7 @@ class TestModelComposition(TestCase):
             default_model.get_submodel("aero")._params["cz_modifier"], cz_modifier
         )
         np.testing.assert_allclose(
-            default_model.get_submodel("aero.base")._params["alpha"],
-            alpha,
+            default_model.get_submodel("aero.base")._params["alpha"], alpha,
         )
         self.assertEqual(default_model.get_submodel("tire")._params["mux"], mux)
 
@@ -168,8 +164,7 @@ class TestModelComposition(TestCase):
             new_model.get_submodel("aero")._params["cz_modifier"], cz_modifier
         )
         np.testing.assert_allclose(
-            new_model.get_submodel("aero.base")._params["alpha"],
-            alpha,
+            new_model.get_submodel("aero.base")._params["alpha"], alpha,
         )
         self.assertEqual(new_model.get_submodel("tire")._params["mux"], mux)
 
@@ -181,6 +176,53 @@ class TestModelComposition(TestCase):
             str(returned_params),
             msg="Parameters did not stay the same in a get/set/get loop",
         )
+
+    def test_get_recursive_params_returns_a_copy(self):
+        """get_recursive_params should return a copy rather than a ref to the model"""
+
+        model = DummyRigidVehicle()
+
+        params = model.get_recursive_params()
+
+        # modify the params, without setting the model's param, the model's param should
+        # stay unchanged
+        param_paths = [
+            "mass",  # top level
+            "aero.cz_modifier",  # middle level
+            "tire.mux",  # leaf level
+        ]
+
+        places = 1
+        for path in param_paths:
+            params.set_param(path, params.get_param(path) + 0.1 ** places)
+            model_params = model.get_recursive_params()
+            self.assertNotAlmostEqual(
+                params.get_param(path), model_params.get_param(path), places
+            )
+
+    def test_set_recursive_params_sets_a_copy(self):
+        """set_recursive_params should set model params to a copy"""
+
+        # For this instantiated model, only use the parameters.
+        ext_params = DummyRigidVehicle().get_recursive_default_params()
+
+        # Now create a new model, and set parameters from external params
+        model = DummyRigidVehicle(params=ext_params)
+
+        # modify the external params, the model's param should stay unchanged
+        param_paths = [
+            "mass",  # top level
+            "aero.cz_modifier",  # middle level
+            "tire.mux",  # leaf level
+        ]
+
+        places = 1
+        for path in param_paths:
+            ext_params.set_param(path, ext_params.get_param(path) + 0.1 ** places)
+            model_params = model.get_recursive_params()
+            self.assertNotAlmostEqual(
+                ext_params.get_param(path), model_params.get_param(path), places
+            )
 
 
 class DummyRigidVehicle(CompositeModel):
