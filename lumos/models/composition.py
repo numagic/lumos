@@ -200,7 +200,10 @@ class CompositeModel:
         """Set the parameteres recursively including the children"""
 
         # The direct parameters of the model
-        self._params = params.data
+        # NOTE: for the direct data at top level, we must copy, as it is a 1 level dict,
+        # which if we don't copy, then we'll be making the new ParameterTree a mutable
+        # copy of the old params!
+        self._params = params.data.copy()
 
         # The parameters of the children
         if not self.is_leaf():
@@ -210,7 +213,10 @@ class CompositeModel:
     def get_recursive_params(self) -> ParameterTree:
         """Assmeble the parameter tree including the children"""
 
-        param_tree = ParameterTree(data=self._params)
+        # NOTE: for the direct data at top level, we must copy, as it is a 1 level dict,
+        # which if we don't copy, then we'll be making the new ParameterTree a mutable
+        # copy of the old params!
+        param_tree = ParameterTree(data=self._params.copy())
         if not self.is_leaf():
             for n, m in self._submodels.items():
                 param_tree.add_child(name=n, subtree=m.get_recursive_params())
