@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1665150490068,
+  "lastUpdate": 1665154605520,
   "repoUrl": "https://github.com/numagic/lumos",
   "entries": {
     "Benchmark": [
@@ -27524,6 +27524,210 @@ window.BENCHMARK_DATA = {
           {
             "name": "jax.10000.nlp.hessian",
             "value": 3.455639686300003,
+            "unit": "sec"
+          },
+          {
+            "name": "num_total",
+            "value": 25,
+            "unit": "-"
+          },
+          {
+            "name": "failure_pct",
+            "value": 0,
+            "unit": "%"
+          },
+          {
+            "name": "avg_success_iter",
+            "value": 42.16,
+            "unit": "iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "yunlong@numagic.io",
+            "name": "yunlongxu",
+            "username": "yunlongxu-numagic"
+          },
+          "committer": {
+            "email": "yunlong@numagic.io",
+            "name": "yunlongxu",
+            "username": "yunlongxu-numagic"
+          },
+          "distinct": true,
+          "id": "0a252dc9c930c182f1bc65581a9906c49dfb7469",
+          "message": "add method for model to set con_outputs",
+          "timestamp": "2022-10-07T14:39:04Z",
+          "tree_id": "861c0a1e5ce239f5064750409f34be9e3e30f264",
+          "url": "https://github.com/numagic/lumos/commit/0a252dc9c930c182f1bc65581a9906c49dfb7469"
+        },
+        "date": 1665154604736,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "jax_jit.model_algebra.constraints",
+            "value": 3.102161522000017,
+            "unit": "sec"
+          },
+          {
+            "name": "jax_jit.model_algebra.jacobian",
+            "value": 11.700103064999979,
+            "unit": "sec"
+          },
+          {
+            "name": "jax_jit.model_algebra.hessian",
+            "value": 57.14993665900002,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.objective",
+            "value": 0.00020259899999928166,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.gradient",
+            "value": 0.0003706482000040978,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.constraints",
+            "value": 0.016127281799998627,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.jacobian",
+            "value": 0.0205136006000032,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.100.nlp.hessian",
+            "value": 0.02564946560000294,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.objective",
+            "value": 0.0004554476999999224,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.gradient",
+            "value": 0.0011683041999958732,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.constraints",
+            "value": 0.17057889540000132,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.jacobian",
+            "value": 0.21992867870000055,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.1000.nlp.hessian",
+            "value": 0.2678371233000007,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.objective",
+            "value": 0.002018831800000953,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.gradient",
+            "value": 0.012943117200001098,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.constraints",
+            "value": 1.9013858830000003,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.jacobian",
+            "value": 2.3851693442,
+            "unit": "sec"
+          },
+          {
+            "name": "casadi.10000.nlp.hessian",
+            "value": 2.853249678799995,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.objective",
+            "value": 0.00022328810000544764,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.gradient",
+            "value": 0.00038115669999569943,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.constraints",
+            "value": 0.012779081100006806,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.jacobian",
+            "value": 0.022320259900004656,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.100.nlp.hessian",
+            "value": 0.040517444799991156,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.objective",
+            "value": 0.00048344609999730894,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.gradient",
+            "value": 0.0012133801000004496,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.constraints",
+            "value": 0.02044966339999519,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.jacobian",
+            "value": 0.10798417019999533,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.1000.nlp.hessian",
+            "value": 0.2380325737000021,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.objective",
+            "value": 0.0021800557000005937,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.gradient",
+            "value": 0.013283952999995564,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.constraints",
+            "value": 0.08639049430000796,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.jacobian",
+            "value": 1.0070043091999992,
+            "unit": "sec"
+          },
+          {
+            "name": "jax.10000.nlp.hessian",
+            "value": 2.2194621118999978,
             "unit": "sec"
           },
           {
