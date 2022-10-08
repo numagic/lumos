@@ -50,22 +50,22 @@ class TimeModel(StateSpaceModel):
 
     def forward(
         self,
-        states: lnp.ndarray,
-        inputs: lnp.ndarray,
-        mesh: float,  # time invariant model
+        states: Dict[str, float],
+        inputs: Dict[str, float],
+        mesh: float = 0.0,  # time invariant model
     ) -> StateSpaceModelReturn:
-        theta = self.get_input(inputs, "theta")
+        params = self._params
+        theta = inputs["theta"]
+        v = states["v"]
+        v_dot = -params["gravity"] * lnp.sin(theta)
 
-        states_dot = self.make_vector(
-            group="states_dot",
-            v_dot=-self._params["gravity"] * lnp.sin(theta),
-            x_dot=lnp.cos(theta) * self.get_state(states, "v"),
-            y_dot=lnp.sin(theta) * self.get_state(states, "v"),
-        )
-        outputs = self.make_vector(group="outputs", theta=theta)
-        return StateSpaceModelReturn(
-            states_dot=states_dot, outputs=outputs
-        )
+        dx_dt = lnp.cos(theta) * v
+        dy_dt = lnp.sin(theta) * v
+
+        # Assemble result
+        states_dot = self.make_dict(group="states_dot", v=v_dot, x=dx_dt, y=dy_dt,)
+        outputs = self.make_dict(group="outputs", theta=theta)
+        return StateSpaceModelReturn(states_dot=states_dot, outputs=outputs)
 
     @classmethod
     def get_default_params(self) -> Dict[str, Any]:
@@ -96,6 +96,7 @@ solution, info = ocp.solve(
     init_guess=np.zeros(ocp.num_dec), max_iter=200, print_level=4,
 )
 print(f"maneuveur time: {ocp.objective(solution):.3f} seconds")
+
 ```
 
 ### Contents
