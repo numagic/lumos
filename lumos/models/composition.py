@@ -97,7 +97,14 @@ class CompositeModel:
         if not model_config:
             model_config = self.get_recursive_default_model_config()
 
-        # TODO: we might want to check the model config is called on the correct model
+        # check the model config is called on the correct model
+        expected_cls_str = type(self).__name__
+        actual_cls_str = model_config.data
+        if actual_cls_str != expected_cls_str:
+            raise TypeError(
+                f"Expects a config for {expected_cls_str} but got a config for {actual_cls_str}"
+            )
+
         if not self.is_leaf():
             # FIXME: access private attribute
             self._build_submodels(model_config._children)

@@ -224,6 +224,12 @@ class TestModelComposition(TestCase):
                 ext_params.get_param(path), model_params.get_param(path), places
             )
 
+    def test_pass_incompatible_config_raises_error(self):
+        wrong_config = DummyAeroWithDRS.get_recursive_default_model_config()
+
+        with self.assertRaises(TypeError):
+            DummyRigidVehicle(model_config=wrong_config)
+
 
 class DummyRigidVehicle(CompositeModel):
     @classmethod
